@@ -1,0 +1,22 @@
+# Python / uv
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Personal session memory (not shared)
+.workbuddy/
+
+# Test sample corpus — copyright/license-sensitive, keep local only
+doc/test_pdf/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS
+Thumbs.db
+.DS_Store
