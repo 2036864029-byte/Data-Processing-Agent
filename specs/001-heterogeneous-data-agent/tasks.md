@@ -11,7 +11,7 @@ description: "P0-A 基础支撑层任务清单（A1–A8 + 集成门禁，对应
 
 **Tests**: 本项目宪法 G8 强制 TDD（测试先行、核心模块覆盖率 ≥ 90%），故每个模块 Phase 均含**先红后绿**的测试任务。
 
-**Organization**: 按 plan「执行优先级与里程碑」组织——P0-A 基础支撑层（A1–A8）每一模块为一个独立可测 Phase；P0-B 功能模块层（B1–B9）**不在此文件**，A 层集成门禁通过后另行生成。
+**Organization**: 按 plan「执行优先级与里程碑」组织——P0-A 基础支撑层（A1–A8）每一模块为一个独立可测 Phase；P0-B 功能模块层（B1–B9）**不在此文件**，见 `tasks-p0-b.md`（任务编号承接本文自 T067 起，两份文件合为**完整 P0 任务图**，均在实现开始前完成）。
 
 **Scope 说明**：A1–A8 是串行依赖链（A1 底座 → A2 核心 → A3 共享 → A4 存储 → A5 注册表 → A6 续跑 → A7 交付骨架 → A8 策略化），本文件按此顺序执行；模块内标记 [P] 的任务可并行。
 
@@ -227,7 +227,7 @@ description: "P0-A 基础支撑层任务清单（A1–A8 + 集成门禁，对应
 - [ ] T065 [P] ADR 记录：`docs/ADR/` 记录 P0-A 关键实现决策（sandbox 归 A5、`pages.py` 转换符号命名、P0-A 单文件任务拆分口径）
 - [ ] T066 全量回归 + 收尾：CI 四件套 + import-linter + 全部 grep 门禁一次跑绿；最终 commit + push
 
-**Checkpoint**: 集成门禁全绿 → **解锁 P0-B**（另行生成 B1–B9 tasks.md）
+**Checkpoint**: 集成门禁全绿 → **解锁 P0-B**（B1–B9 任务已分解于 `tasks-p0-b.md`，可开始实现）
 
 ---
 
@@ -278,7 +278,7 @@ Task: "实现 src/dataagent/kernel/budget.py"
 6. 完成 A6 → 故障注入续跑全绿 → commit + push
 7. 完成 A7 → Docker 环境起停全绿 → commit + push
 8. 完成 A8 → 页级确定性全绿 → commit + push
-9. **STOP and VALIDATE**: 跑 Phase 9 集成门禁 → 通过后解锁 P0-B（B1–B9 另生成 tasks.md）
+9. **STOP and VALIDATE**: 跑 Phase 9 集成门禁 → 通过后解锁 P0-B（任务已分解于 `tasks-p0-b.md`，按 B1→B9 顺序实现）
 
 ### 并行团队策略（多人时）
 
@@ -298,4 +298,4 @@ Task: "实现 src/dataagent/kernel/budget.py"
 - **TDD 铁律**：测试先写、先红后绿，不得先实现后补测试（宪法 G8 NON-NEGOTIABLE）
 - **每模块即推送**：每个 Phase 完成后 commit + push（依赖全局代理 `127.0.0.1:7890`）
 - 避免：空泛任务、同文件冲突、跨模块依赖破坏独立性
-- P0-B（B1–B9）与 P1 不在本文件范围；A 层集成门禁通过后另行生成
+- P0-B（B1–B9）不在此文件；全量拆解见 `tasks-p0-b.md`（与本文件同批完成、先于实现）；P1 暂不拆解
