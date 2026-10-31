@@ -26,5 +26,6 @@ def redis_container() -> Iterator[RedisContainer]:
 
 @pytest.fixture(scope="session")
 def minio_container() -> Iterator[MinioContainer]:
-    with MinioContainer("minio/minio:latest") as minio:
+    # 固定版本标签：可复现；避免 Docker Hub 拉取 latest 失败的环境问题
+    with MinioContainer("minio/minio:RELEASE.2023-03-20T20-16-18Z") as minio:
         yield minio

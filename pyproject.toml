@@ -5,10 +5,13 @@ description = "插件化异构数据处理 Agent（DataAgent）— 确定性流�
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.1",
+    "boto3>=1.43.123",
     "json-logic>=0.6.3",
+    "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.2",
     "pydantic-settings>=2.16.2",
     "pyyaml>=6.0.3",
+    "redis>=8.1.0",
     "sqlalchemy>=2.1.6",
 ]
 
@@ -62,6 +65,11 @@ module = [
     "dataagent.pipeline.repair.*",
 ]
 strict = true
+
+# boto3 未发布完整类型存根（mypy strict 下必报 missing stubs）；仅在 s3.py 内使用，G9 门禁限定
+[[tool.mypy.overrides]]
+module = ["boto3", "botocore", "botocore.*"]
+ignore_missing_imports = true
 
 # coverage：单元行覆盖——其余 ≥ 80%；核心模块（kernel / platform.store / pipeline.repair）≥ 90%
 # （宪法「测试分层与目标」。阈值在 CI 强制执行：全局 ≥80% 见 pytest 步骤 --cov-fail-under；

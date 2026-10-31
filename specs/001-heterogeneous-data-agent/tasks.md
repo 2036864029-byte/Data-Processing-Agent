@@ -103,18 +103,18 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T022 [A4] 对象存储契约测试 `tests/integration/store/test_objectstore.py` — put / get / exists / delete / list；内容哈希 key 换底座不变；**同一套套件参数化**分别跑 local 与 MinIO（宪法：业务只经 `platform/store/objectstore/`，禁直接 `boto3.client`）
-- [ ] T023 [A4] 队列最小语义测试 `tests/integration/store/test_queue.py` — 至少一次 + 手动确认 + 死信；**不依赖延迟消息与优先级队列**（应用层用 `visible_at` 实现，research D6）；testcontainers Redis
-- [ ] T024 [A4] SQL 子集 + Alembic 测试 `tests/integration/store/test_sql.py` — `alembic upgrade head` / `downgrade base` 干净；所有 DDL 走迁移（G9 grep 门禁：migrations 与 models 一致）；SQLAlchemy Core 无 ORM
+- [X] T022 [A4] 对象存储契约测试 `tests/integration/store/test_objectstore.py` — put / get / exists / delete / list；内容哈希 key 换底座不变；**同一套套件参数化**分别跑 local 与 MinIO（宪法：业务只经 `platform/store/objectstore/`，禁直接 `boto3.client`）
+- [X] T023 [A4] 队列最小语义测试 `tests/integration/store/test_queue.py` — 至少一次 + 手动确认 + 死信；**不依赖延迟消息与优先级队列**（应用层用 `visible_at` 实现，research D6）；testcontainers Redis
+- [X] T024 [A4] SQL 子集 + Alembic 测试 `tests/integration/store/test_sql.py` — `alembic upgrade head` / `downgrade base` 干净；所有 DDL 走迁移（G9 grep 门禁：migrations 与 models 一致）；SQLAlchemy Core 无 ORM
 
 ### 实现 A4
 
-- [ ] T025 [A4] 实现 `src/dataagent/platform/store/objectstore/base.py` — 抽象接口（put / get / exists / delete / list）+ 内容寻址 key 约定（主键 = SHA-256 内容哈希）
-- [ ] T026 [P] [A4] 实现 `src/dataagent/platform/store/objectstore/local.py` — 本地盘实现（原子写、先写内容再写索引、临时盘预留）
-- [ ] T027 [A4] 实现 `src/dataagent/platform/store/objectstore/s3.py` — S3 实现（`boto3.client` 只允许出现在此文件，业务代码禁止直接调用，G9）
-- [ ] T028 [A4] 实现 `src/dataagent/platform/store/queue/redis.py` — Redis Streams 最小语义（XADD / XREADGROUP / XACK / 死信，全部封装，业务禁直接 `redis.xadd`，G9）
-- [ ] T029 [P] [A4] 实现 `src/dataagent/platform/store/sql/` — SQLAlchemy Core（禁 ORM）引擎 / 连接工厂，标准 SQL 子集，P0 不做运行时切换
-- [ ] T030 [A4] 初始化 Alembic 迁移骨架 `migrations/` — `alembic init` + `env.py` + 基线空迁移（后续所有 DDL 变更必须走迁移）
+- [X] T025 [A4] 实现 `src/dataagent/platform/store/objectstore/base.py` — 抽象接口（put / get / exists / delete / list）+ 内容寻址 key 约定（主键 = SHA-256 内容哈希）
+- [X] T026 [P] [A4] 实现 `src/dataagent/platform/store/objectstore/local.py` — 本地盘实现（原子写、先写内容再写索引、临时盘预留）
+- [X] T027 [A4] 实现 `src/dataagent/platform/store/objectstore/s3.py` — S3 实现（`boto3.client` 只允许出现在此文件，业务代码禁止直接调用，G9）
+- [X] T028 [A4] 实现 `src/dataagent/platform/store/queue/redis.py` — Redis Streams 最小语义（XADD / XREADGROUP / XACK / 死信，全部封装，业务禁直接 `redis.xadd`，G9）
+- [X] T029 [P] [A4] 实现 `src/dataagent/platform/store/sql/` — SQLAlchemy Core（禁 ORM）引擎 / 连接工厂，标准 SQL 子集，P0 不做运行时切换
+- [X] T030 [A4] 初始化 Alembic 迁移骨架 `migrations/` — `alembic init` + `env.py` + 基线空迁移（后续所有 DDL 变更必须走迁移）
 
 **Checkpoint**: 双实现同一套件全绿、迁移干净 → commit + push
 
