@@ -82,14 +82,14 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T017 [A3] 页码基准测试 `tests/unit/contracts/test_pages.py` — 断言式单测固定 1-indexed：`extract_pages_markdown(path, pages=[k])` 后 `pages[0].page == k`，且该页有表时 `k+1 in pages_with_tables`（必写 #1）；`page_from_plugin` / `page_to_internal` round-trip；边界（第 1 页合法、第 0 页报错、末页）
-- [ ] T018 [A3] 缺陷码枚举 + 映射测试 `tests/unit/contracts/test_defects.py` 与 `tests/unit/pipeline/repair/test_mapping.py` — 11 码封闭枚举（逐字引用 defect-codes.md）；`pipeline/repair/mapping.py` 覆盖全部 11 码且枚举与映射表长度一致（G9 grep 门禁）；`location` 必填、缺 location 不进修复队列；`raw_reason` 仅 `code = plugin_reason_unknown` 时必填
+- [X] T017 [A3] 页码基准测试 `tests/unit/contracts/test_pages.py` — 断言式单测固定 1-indexed：`extract_pages_markdown(path, pages=[k])` 后 `pages[0].page == k`，且该页有表时 `k+1 in pages_with_tables`（必写 #1）；`page_from_plugin` / `page_to_internal` round-trip；边界（第 1 页合法、第 0 页报错、末页）
+- [X] T018 [A3] 缺陷码枚举 + 映射测试 `tests/unit/contracts/test_defects.py` 与 `tests/unit/pipeline/repair/test_mapping.py` — 11 码封闭枚举（逐字引用 defect-codes.md）；`pipeline/repair/mapping.py` 覆盖全部 11 码且枚举与映射表长度一致（G9 grep 门禁）；`location` 必填、缺 location 不进修复队列；`raw_reason` 仅 `code = plugin_reason_unknown` 时必填
 
 ### 实现 A3
 
-- [ ] T019 [A3] 实现 `src/dataagent/contracts/pages.py` — **★ 唯一页码转换点**：`page_from_plugin` / `page_to_internal`，内部一律 1-indexed（转换符号变量名固定，供 grep 门禁匹配）
-- [ ] T020 [P] [A3] 实现 `src/dataagent/contracts/defects.py` — 缺陷码封闭枚举（11 项，含默认算子与档位，见 defect-codes.md）+ `Defect` / `OperatorResult` 类型（`location` 必填、`changed` 停机标志）
-- [ ] T021 [A3] 实现 `src/dataagent/pipeline/repair/mapping.py` — `defect_code → operator` 映射**写死在代码里**（按 defect-codes.md「默认算子」列），单向、禁运行时推断（同一缺陷两次修复不得走不同算子）
+- [X] T019 [A3] 实现 `src/dataagent/contracts/pages.py` — **★ 唯一页码转换点**：`page_from_plugin` / `page_to_internal`，内部一律 1-indexed（转换符号变量名固定，供 grep 门禁匹配）
+- [X] T020 [P] [A3] 实现 `src/dataagent/contracts/defects.py` — 缺陷码封闭枚举（11 项，含默认算子与档位，见 defect-codes.md）+ `Defect` / `OperatorResult` 类型（`location` 必填、`changed` 停机标志）
+- [X] T021 [A3] 实现 `src/dataagent/pipeline/repair/mapping.py` — `defect_code → operator` 映射**写死在代码里**（按 defect-codes.md「默认算子」列），单向、禁运行时推断（同一缺陷两次修复不得走不同算子）
 
 **Checkpoint**: 页码 / 映射单测 + grep 门禁全绿 → commit + push
 
