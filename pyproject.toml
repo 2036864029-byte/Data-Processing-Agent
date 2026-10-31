@@ -8,6 +8,7 @@ dependencies = [
     "json-logic>=0.6.3",
     "pydantic>=2.14.2",
     "pydantic-settings>=2.16.2",
+    "pyyaml>=6.0.3",
     "sqlalchemy>=2.1.6",
 ]
 
@@ -25,6 +26,7 @@ dev = [
     "redis>=8.1.0",
     "ruff>=0.17.3",
     "testcontainers>=4.15.0",
+    "types-pyyaml>=6.0.12.20261030",
 ]
 
 # ──────────────────────────────────────────────────────────────

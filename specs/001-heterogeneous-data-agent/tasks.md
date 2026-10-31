@@ -56,19 +56,19 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 > **NOTE: 以下测试先写、确保先 FAIL 再实现。**
 
-- [ ] T007 [A2] 状态机转移表测试 `tests/unit/kernel/test_state.py` — data-model.md「唯一合法转移表」：`RECEIVED→SNIFFED/REJECTED`、`PARSED→POSTPROCESS/L1_CHECK/REPAIRING`、`L1_CHECK→L2_CHECK/ATTRIBUTED`、`ATTRIBUTED→POSTPROCESS/REPAIRING/ESCALATED`、`L3_CHECK→PUBLISHED` 等全部合法转移断言唯一后继；非法转移（如 `SNIFFED→PUBLISHED`）抛错；恢复语义 = 重新执行当前状态动作、每个状态动作幂等
-- [ ] T008 [P] [A2] 内容哈希 / uuidv7 测试 `tests/unit/contracts/test_ids.py` — SHA-256 幂等（同内容同哈希、不同内容不同哈希）；uuidv7 单调可排序（时间前缀递增）
-- [ ] T009 [P] [A2] 错误码封闭集测试 `tests/unit/contracts/test_errors.py` — 枚举穷尽、无运行时字符串字面量、新增码必须走版本升级（宪法「缺陷码是封闭集」）
-- [ ] T010 [A2] 三层预算测试 `tests/unit/kernel/test_budget.py` — 成本 / 次数 / 耗时三层扣减；耗尽触发升级（budget 结构见 data-model.md Task.budget）
-- [ ] T011 [A2] 单一配置 schema 测试 `tests/unit/platform/test_config.py` — pydantic-settings 从 env 与 config.yaml 载入同一 schema；单机多机同构（G10：配置只有一份 schema，差别只是值）
+- [X] T007 [A2] 状态机转移表测试 `tests/unit/kernel/test_state.py` — data-model.md「唯一合法转移表」：`RECEIVED→SNIFFED/REJECTED`、`PARSED→POSTPROCESS/L1_CHECK/REPAIRING`、`L1_CHECK→L2_CHECK/ATTRIBUTED`、`ATTRIBUTED→POSTPROCESS/REPAIRING/ESCALATED`、`L3_CHECK→PUBLISHED` 等全部合法转移断言唯一后继；非法转移（如 `SNIFFED→PUBLISHED`）抛错；恢复语义 = 重新执行当前状态动作、每个状态动作幂等
+- [X] T008 [P] [A2] 内容哈希 / uuidv7 测试 `tests/unit/contracts/test_ids.py` — SHA-256 幂等（同内容同哈希、不同内容不同哈希）；uuidv7 单调可排序（时间前缀递增）
+- [X] T009 [P] [A2] 错误码封闭集测试 `tests/unit/contracts/test_errors.py` — 枚举穷尽、无运行时字符串字面量、新增码必须走版本升级（宪法「缺陷码是封闭集」）
+- [X] T010 [A2] 三层预算测试 `tests/unit/kernel/test_budget.py` — 成本 / 次数 / 耗时三层扣减；耗尽触发升级（budget 结构见 data-model.md Task.budget）
+- [X] T011 [A2] 单一配置 schema 测试 `tests/unit/platform/test_config.py` — pydantic-settings 从 env 与 config.yaml 载入同一 schema；单机多机同构（G10：配置只有一份 schema，差别只是值）
 
 ### 实现 A2
 
-- [ ] T012 [P] [A2] 实现 `src/dataagent/contracts/ids.py` — 内容哈希（SHA-256）与 uuidv7；幂等键 = `hash(文件) + 页范围 + 引擎 + 参数 + 规则包版本`（主键铁律：**文档与页产物主键必须是内容哈希，不得使用自增 ID**）
-- [ ] T013 [P] [A2] 实现 `src/dataagent/contracts/errors.py` — 错误码封闭集枚举（无内部依赖叶子模块）
-- [ ] T014 [P] [A2] 实现 `src/dataagent/kernel/state.py` — 状态机唯一合法转移表（纯映射、无副作用；含 REJECTED / ESCALATED 终态；不新增恢复状态）
-- [ ] T015 [P] [A2] 实现 `src/dataagent/kernel/budget.py` — 三层预算（成本 / 次数 / 耗时）扣减与耗尽判定；档位成本扣减规则（FR-008）：后处理 0 次、参数重跑 1 次、换引擎 2 次
-- [ ] T016 [A2] 实现 `src/dataagent/platform/config.py` — 单一配置 schema（pydantic-settings）
+- [X] T012 [P] [A2] 实现 `src/dataagent/contracts/ids.py` — 内容哈希（SHA-256）与 uuidv7；幂等键 = `hash(文件) + 页范围 + 引擎 + 参数 + 规则包版本`（主键铁律：**文档与页产物主键必须是内容哈希，不得使用自增 ID**）
+- [X] T013 [P] [A2] 实现 `src/dataagent/contracts/errors.py` — 错误码封闭集枚举（无内部依赖叶子模块）
+- [X] T014 [P] [A2] 实现 `src/dataagent/kernel/state.py` — 状态机唯一合法转移表（纯映射、无副作用；含 REJECTED / ESCALATED 终态；不新增恢复状态）
+- [X] T015 [P] [A2] 实现 `src/dataagent/kernel/budget.py` — 三层预算（成本 / 次数 / 耗时）扣减与耗尽判定；档位成本扣减规则（FR-008）：后处理 0 次、参数重跑 1 次、换引擎 2 次
+- [X] T016 [A2] 实现 `src/dataagent/platform/config.py` — 单一配置 schema（pydantic-settings）
 
 **Checkpoint**: A2 单测全绿 → commit + push
 

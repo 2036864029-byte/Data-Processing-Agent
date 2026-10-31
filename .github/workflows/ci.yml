@@ -36,7 +36,7 @@ jobs:
       - name: 核心模块覆盖率 ≥ 90%（kernel / platform.store / pipeline.repair）
         run: |
           if ls src/dataagent/kernel/*.py src/dataagent/platform/store/*.py src/dataagent/pipeline/repair/*.py 2>/dev/null | grep -q .; then
-            coverage report --fail-under=90 \
+            uv run coverage report --fail-under=90 \
               --include="src/dataagent/kernel/**,src/dataagent/platform/store/**,src/dataagent/pipeline/repair/**"
           else
             echo "核心模块尚未实现，本步跳过"

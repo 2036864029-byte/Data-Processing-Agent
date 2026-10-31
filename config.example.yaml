@@ -1,0 +1,35 @@
+# DataAgent 单一配置 schema 示例（与 src/dataagent/platform/config.py 字段一一对应）。
+# 实际使用：复制为 config.yaml（或经 DATAAGENT_CONFIG 指向），env 变量 DATAAGENT_<字段名> 优先。
+# 未知键会被拒绝（extra="forbid"，单一 schema 强约束）。
+
+# 环境与日志
+env: dev
+log_level: INFO
+
+# 存储与队列（A4 落点）
+postgres_url: postgresql+psycopg://dataagent:dataagent@localhost:5432/dataagent
+redis_url: redis://localhost:6379/0
+object_store_backend: local        # local | s3
+local_store_root: var/objects
+s3_endpoint: ""
+s3_access_key: ""
+s3_secret_key: ""
+s3_bucket: dataagent
+
+# 批与并发（宪法 IV / research D5）
+batch_size: 32
+worker_concurrency: 4
+
+# 预算默认值（data-model Task.budget 三层）
+budget_max_cost: 100
+budget_max_attempts: 50
+budget_max_duration_s: 3600.0
+
+# Plan 守卫（data-model Plan.guards）
+plan_max_model_calls: 8
+plan_max_replans: 3
+plan_max_wall_time_s: 3600
+
+# API / 交付
+api_host: 127.0.0.1
+api_port: 8080
