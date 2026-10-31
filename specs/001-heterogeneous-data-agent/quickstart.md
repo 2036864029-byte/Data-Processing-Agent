@@ -27,7 +27,7 @@ dataagent up                              # 自检 → 建议配置 → 拉起 w
 
 ## 验证场景
 
-> 每个场景对应 spec 的 5 个用户故事，跑通即证明对应能力端到端可用。
+> 每个场景对应 spec 的用户故事，跑通即证明对应能力端到端可用。
 
 ### S1. 批量异构文档自动处理（spec US1）
 
@@ -91,16 +91,31 @@ dataagent up                    # 重启后从 resume_point 继续
 
 **预期**：强杀 worker 后恢复 ≤ 30s、已完成批 0 重做；断网环境全链路（含 OCR 路径）可运行、数据不出域。
 
+### S6. 自然语言 → Plan 预览 → 探路 → 分支（spec FR-026）
+
+```bash
+# 提交任务时带 plan 段（NL → Plan 编译结果），或直接提交编译好的 plan
+curl -X POST /tasks -d @taskspec_with_plan.json
+curl /tasks/{id}                    # 轮询：先探路 100 页 → 按 stp_rate 分支 → 批量
+curl /tasks/{id}/report
+```
+
+**预期**：
+- 任务按 Plan 的 stages 顺序执行：探路（1–100 页）→ `decision`（对 `stp_rate` 求值分支）→ 批量（按命中策略）；
+- 同一 `plan_version` 重放历史任务，输出逐字一致；
+- 重规划次数受 `max_replans` 限制，超出后停止并交付带缺口结果；
+- 任务级模型调用 ≤ 8 次；分支表达式引用未知指标在生成期被拒绝。
+
 ## 回归验证（宪法六个必写测试，随功能模块落地）
 
 | # | 断言 | 模块 |
 | -- | ---- | ---- |
-| 1 | 页码基准：`extract_pages_markdown(path, pages=[k])` 后 `pages[0].page == k`，该页有表时 `k+1 in pages_with_tables` | extract/ |
-| 2 | 未知原因透传：映射表外 reason → `plugin_reason_unknown`，`raw_reason` 原样保留 | repair/ |
-| 3 | 算子不可变且幂等：原产物不变、两次调用候选一致 | repair/ |
-| 4 | 无进展停机：`changed == false` 立即放弃、不重试第二次 | repair/ |
-| 5 | 主键内容哈希 / 幂等键：锁定版本重跑历史任务，产物哈希一致 | store/ |
-| 6 | 增强回路收敛：同码唯一、三层预算耗尽后升级、无无限循环 | repair/ |
+| 1 | 页码基准：`extract_pages_markdown(path, pages=[k])` 后 `pages[0].page == k`，该页有表时 `k+1 in pages_with_tables` | `contracts/pages.py` |
+| 2 | 未知原因透传：映射表外 reason → `plugin_reason_unknown`，`raw_reason` 原样保留 | `pipeline/repair/` |
+| 3 | 算子不可变且幂等：原产物不变、两次调用候选一致 | `pipeline/repair/` |
+| 4 | 无进展停机：`changed == false` 立即放弃、不重试第二次 | `pipeline/repair/` |
+| 5 | 主键内容哈希 / 幂等键：锁定版本重跑历史任务，产物哈希一致 | `contracts/ids.py` `platform/store/` |
+| 6 | 增强回路收敛：同码唯一、三层预算耗尽后升级、无无限循环 | `pipeline/repair/` |
 
 ## 性能与稳定性门禁（`dataagent bench`）
 

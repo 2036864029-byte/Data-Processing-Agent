@@ -2,16 +2,18 @@
 ================================================================================
 SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 ================================================================================
-- 版本变更：1.0.0（首次采纳） → 1.1.0（新增包管理器约束）
-- 修改的原则：无原则重定义；Section 2「技术栈与项目结构规范」新增小节
-  「包管理器约束（强制）」并在技术栈表新增一行；Section 3「工程门禁」
-  新增一条 CI 检查（uv 为唯一安装命令）
-- 新增章节（首次采纳时）：Core Principles 六条核心原则；技术栈与项目结构规范；
-  质量约束与工程门禁；Governance
+- 版本变更：1.1.0 → 1.2.0（2026-10-31）
+- 修改的原则：原则 I（确定性优先）实质扩展——模型调用点从「三个模型调用点（意图→TaskSpec、
+  失败归因、修复动作兜底）」收敛为「任务级三处（意图→Plan、偏离重规划、整本策略切换）」，
+  页级决策（路由/档位/算子/续试/升级，含失败归因）一律确定性规则；技术栈表新增 pydantic-ai 行
+  （仅 kernel/policies/model_*.py）；Section 2 项目结构节整段替换为 5 层包结构
+  （contracts/platform/kernel/pipeline/apps）并新增「依赖方向可执行」；Section 3 工程门禁
+  页码 grep 改为按转换符号变量名匹配并更新路径，新增 pydantic_ai 门禁；Governance
+  「需求依据唯一性」指向 PRD V2.3
+- 新增章节：无
 - 删除章节：无
 - 延后 TODO：
-  - 无占位符保留。API 端点与 CLI 命令清单（TDD 的 HTTP API / CLI 章节）不写入宪法，
-    属技术方案范围；宪法只锁定接口形态原则。
+  - 无。历史 Sync Impact Report（1.0.0→1.1.0）由 git 历史保留。
 ================================================================================
 -->
 
@@ -21,18 +23,19 @@ SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 
 ### I. 确定性优先（Determinism-First · NON-NEGOTIABLE）
 
-- 整条流水线除三个模型调用点（意图→TaskSpec、失败归因、修复动作兜底）外，**必须全部是确定性代码**；路由决策、兜底档位（T0–T3）判定、门控判定、合并组装均由规则决定，**不得**由模型决定（PRD 2.2）。
+- 决策分两级：**页级决策一律规则**（格式路由、兜底档位（T0–T3）判定、算子选择、是否续试、何时升级，含失败归因），**不得**由模型决定，且必须可复现；**任务级决策**（自然语言→Plan、偏离重规划、整本策略切换）可由模型承担，但**每任务调用 ≤ 8 次**，且 Plan 一经冻结，执行路径必须确定（PRD 2.2 / 4.1.9）。
+- Plan 的分支条件必须是受限表达式（json-logic），白名单仅限统计指标，**禁止**自由图结构与运行时解释器（PRD 4.1.9）。
 - 模型输出**必须**是封闭集 `label + score` 或受 JSON Schema 约束的结构化 JSON，禁止自由文本（PRD 2.3）。
 - 插件**必须**声明 `determinism: deterministic | stochastic | model`；仅 `deterministic` 插件允许启用结果缓存与 T2 重跑，缓存键 = 内容哈希 + 参数哈希 + `id@version`（PRD 5.1）。
-- 同一输入**必须**产生同一产物、同一档位、同一缺陷清单；任何不可复现的来源（非幂等算子、无量化采纳标准的增强、模型判定档位）均视为缺陷（PRD R12）。
+- 同一输入**必须**产生同一产物、同一档位、同一缺陷清单；任何不可复现的来源（非幂等算子、无量化采纳标准的增强、模型判定页级决策）均视为缺陷（PRD R12）。
 
-**理由**：STP 率、档位分布、误放率等全部验收指标都以可复现为前提。若模型直接决定兜底档位，同一输入两次运行结果不同，验收与审计即失效。
+**理由**：STP 率、档位分布、误放率等全部验收指标都以可复现为前提。灵活性只允许存在于"计划生成时刻"，不允许存在于"执行时刻"——否则同一输入两次运行结果不同，验收与审计即失效。
 
 ### II. 复用优先，不重造轮子（Reuse-Over-Reinvent）
 
 - 上游已提供的能力**必须直接复用**，不重造：`ocr_reasons_by_page`（逐页失败原因）、`pages_needing_ocr`、`cmap_gaps` 原样落库；未知 reason 透传至 `plugin_reason_unknown` 兜底桶，禁止丢弃或凭猜测归入邻近码（PRD 4.5.7）。
-- 复用**必须**经过统一抽象与契约，禁止绕过：对象存储只经 `store/objectstore/`；队列只经 `store/queue/` 且只依赖最小语义；业务代码禁止直接 `redis.xadd` / `boto3.client`。
-- 项目内公共机制全局唯一：页码基准转换点全工程只允许一处（`extract/wrapper.py`），内部一律 1-indexed；缺陷码→算子映射写死在 `repair/mapping.py`，禁止运行时推断（PRD 4.5.7）。
+- 复用**必须**经过统一抽象与契约，禁止绕过：对象存储只经 `platform/store/objectstore/`；队列只经 `platform/store/queue/` 且只依赖最小语义；业务代码禁止直接 `redis.xadd` / `boto3.client`。
+- 项目内公共机制全局唯一：页码基准转换点全工程只允许一处（`contracts/pages.py`），内部一律 1-indexed；缺陷码→算子映射写死在 `pipeline/repair/mapping.py`，禁止运行时推断（PRD 4.5.7）。
 - 定制只允许做在外围（T1 后处理层、`patches/`），**禁止**为单个特性修改插件源码（PRD R9）；必须改的集中在 `patches/` 并逐条记录原因，锁定版本、定期评估上游升级。
 
 **理由**：成本与可靠性优势全部来自"复用上游 + 不 fork 上游"。每次自造一个上游已提供的能力，都在制造重复代码与分叉风险，并使定制随升级线性加价。
@@ -89,11 +92,12 @@ SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 | PDF 分类与解析 | **pdf-inspector**（`engine.pdf` 插件，Rust 内核） | 双 capability；其余组件可替换，仅此需满足 5.1 契约 |
 | 状态与审计 | PostgreSQL | 标准 SQL 子集，P0 不做运行时切换 |
 | 队列 | Redis Streams | 只依赖最小语义：至少一次 + 手动确认 + 死信 |
-| 对象存储 | MinIO + 本地盘双实现 | 经 `store/objectstore/` 抽象，换底座 key 不变 |
+| 对象存储 | MinIO + 本地盘双实现 | 经 `platform/store/objectstore/` 抽象，换底座 key 不变 |
 | 配置 | pydantic-settings | 单一 schema，单机多机同构 |
 | 受限表达式 | json-logic | RulePack / `page_filter`，沙箱求值，无代码执行 |
 | 数据库迁移 | Alembic | 所有 DDL 变更必须走迁移 |
 | 测试 | pytest + hypothesis | 标定 / 评测用自建 eval 脚本 |
+| 任务级模型调用 | pydantic-ai（仅 `kernel/policies/model_*.py`） | 三个任务级模型实现内部使用；不接管编排 / 状态 / 续跑；锁精确版本进 uv.lock，离线包含其依赖 |
 | 包管理 | **uv**（强制，唯一允许） | 禁 pip / poetry / conda；新增依赖必须 `uv add`，锁定文件随源码提交 |
 
 **选型原则**（PRD 附录 C）：上表"选型"列只是当前实现，不是架构承诺；除 pdf-inspector 外任何一项可替换为同能力实现，只需满足 5.1 插件契约。**禁止**引入 Celery / Kafka / Ray / K8s / 向量库 / ORM（用 SQLAlchemy Core）/ gRPC 网关 / LangChain——这些与"单机多机同构、CPU 优先、轻量私有化"的约束冲突。
@@ -107,31 +111,47 @@ SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 
 **理由**：单一包管理器消除依赖解析与锁定文件的漂移，保证开发、CI、离线交付三方环境一致；与"完全离线私有化"（PRD 4.8.4）和"依赖许可证合规"（PRD R10、5.4）的约束一致。
 
-### 项目结构（按功能模块区分）
+### 项目结构（5 层包结构，依赖方向可执行）
 
-- 单一 src-layout：`src/dataagent/`，目录按功能模块划分，每个模块单一职责，与 PRD 功能域一一对应：
+- 单一 src-layout：`src/dataagent/`，收敛为 **5 个一级包**，依赖方向单向：
+  `apps → pipeline → kernel → platform → contracts`，反向依赖一律禁止（import-linter 强制）。
+- **contracts/**（契约层，依赖 = 无；只含类型定义与无内部依赖的叶子函数）：
+  - `ids.py` — 内容哈希 / uuidv7；`errors.py` — 错误码封闭集
+  - `pages.py` — ★ 唯一页码转换点（内部一律 1-indexed）
+  - `defects.py` — 缺陷码枚举 + Defect / OperatorResult
+  - `plugin.py` — 插件 Protocol + manifest schema；`policies.py` — 8 个决策点 Protocol【新增】
+- **platform/**（支撑设施，依赖 = contracts）：
   - `config.py` — 单一配置 schema（pydantic-settings）
-  - `cli/` — up / status / logs / plugin / doctor
-  - `api/` — HTTP 端点 + 只读状态页 `/status`
-  - `core/` — 状态机（唯一合法转移表）、内容哈希 / uuidv7、三层预算、错误码封闭集
-  - `ingest/` — 接入接收 + 11 项文件级体检
-  - `sniff/` — 一级格式判定器（自建：magic / 编码 / 分隔符）
-  - `route/` — 两级路由决策 + 链路注册表
-  - `profile/` — 页面画像两段写入
-  - `extract/` — ★ 唯一页码转换点 `wrapper.py`、分批与内存估算、PageArtifact 编解码
-  - `quality/` — L1/L2 指标、硬门控、分层抽样、标定
-  - `repair/` — 增强算子库（postprocess / reinput / rerun / engine_swap）、`mapping.py`、增强回路与停机
-  - `merge/` — 合并组装、跨页表、文档级校验
-  - `output/` — JSON / CSV / Markdown / 报告
-  - `rules/` — RulePack + 受限表达式引擎
-  - `plugins/` — 插件协议 / manifest / 注册表 / 加载器 + `adapters/`
   - `store/` — 对象存储抽象（local + s3）、队列（最小语义）、SQL 标准子集
-  - `runtime/` — worker / supervisor / heartbeat / resources / sandbox
+  - `runtime/` — heartbeat / resources（资源预检与配额）/ sandbox（执行设施）
   - `observe/` — span、指标、日志、审计
+  - `rules/` — RulePack + json-logic 表达式引擎
+  - `plugins/` — loader + `adapters/`（engine_pdf / engine_csv / engine_text）
+- **kernel/**（内核，依赖 = contracts + platform）：
+  - `state.py` — 状态机唯一合法转移表；`budget.py` — 三层预算
+  - `plan.py` — Plan 解析 / 冻结 / 分支求值【新增】
+  - `registry.py` — 插件注册表；`supervisor.py` — 控制面调度（状态机驱动 + 批次派发）
+  - `policies/` — Policy 实现：`rule_*.py`（P0）/ `model_*.py`（M3，唯一允许用 pydantic-ai 之处）
+- **pipeline/**（处理阶段，依赖 = contracts + platform + kernel）：
+  - `ingest/` `sniff/` `route/` `profile/` `extract/`（分批与内存估算、PageArtifact 编解码）
+  - `quality/` `repair/`（增强算子库 + `mapping.py`——缺陷码→算子映射为单方规则，留原地）、`merge/` `output/`
+- **apps/**（进程入口，依赖 = 全部）：
+  - `cli/` — up / status / logs / plugin / doctor / bench
+  - `api/` — HTTP 端点 + 只读状态页 `/status`
+  - `worker/` — 数据面批执行入口【新增：进程壳，调用 pipeline + kernel/policies】
 - 根目录：`migrations/`（Alembic）、`tests/`（unit / integration / e2e / fault / bench）、`deploy/`（Docker Compose / Dockerfile / offline）、`docs/`（ADR 记录）。
-- 依赖方向规则：`core/`、`store/`、`extract/wrapper.py`、`repair/mapping.py` 是全局共享机制；业务模块只能依赖这些共享机制，**禁止**反向依赖、**禁止**绕过共享机制直接操作具体后端。
 
-**理由**：按功能模块而非按层划分，使 PRD 每个功能域（接入 / 路由 / 解析 / 质检 / 修复 / 输出）在代码中有单一归属目录；新增格式、新增算子、新增质检指标都有明确落点，不扩散到无关模块。
+**依赖方向规则（可执行，非靠自觉）**：`contracts` 不 import 任何内部模块；`platform` / `kernel` / `pipeline` / `apps` 只依赖低层包。用 import-linter 的 `layers` 契约固化：
+
+```toml
+[[tool.importlinter.contracts]]
+name = "分层单向"
+type = "layers"
+layers = ["dataagent.apps", "dataagent.pipeline", "dataagent.kernel",
+          "dataagent.platform", "dataagent.contracts"]
+```
+
+**理由**：按功能域 + 分层双维度组织——功能域（接入 / 路由 / 解析 / 质检 / 修复 / 输出）在 `pipeline/` 内各占一个目录，全局契约上提至 `contracts/`，控制逻辑收敛至 `kernel/`；依赖方向由机器校验，新增格式、新增算子、新增质检指标都有明确落点，不扩散到无关模块。
 
 ---
 
@@ -141,7 +161,7 @@ SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 
 - 测试先行（Red-Green-Refactor）：规格确认后先写测试，测试由红变绿前不得实现；测试写入 → 人工确认 → 失败 → 再实现。
 - 测试分层与目标：
-  - 单元：判定器阈值、编码检测、分隔符统计、页码转换、算子幂等、预算扣减 —— 行覆盖 ≥ 80%，核心模块（`core/` `store/` `repair/`）≥ 90%
+  - 单元：判定器阈值、编码检测、分隔符统计、页码转换、算子幂等、预算扣减 —— 行覆盖 ≥ 80%，核心模块（`kernel/` `platform/store/` `pipeline/repair/`）≥ 90%
   - 集成：一次完整任务（PG / Redis / MinIO 用 testcontainers）
   - 端到端：200 页黄金集，出 STP / TEDS / 标题层级
   - 性能：单页 p50/p95、批量吞吐、内存峰值（`dataagent bench`）
@@ -158,13 +178,15 @@ SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 
 ### 工程门禁（只写能机器判定的规范）
 
-- 合并前必须过 CI：lint / type（mypy，`core/` `store/` `repair/` 严格）/ unit / 集成。
+- 合并前必须过 CI：lint / type（mypy，`kernel/` `platform/store/` `pipeline/repair/` 严格）/ unit / 集成。
 - CI 可检查的硬约束（违反即失败）：
-  - 页码偏移只允许在 `extract/wrapper.py`（grep `+1` / `-1`）
+  - 分层单向依赖：import-linter `layers` 契约（见"项目结构"节），反向依赖即失败
+  - 页码基准转换只允许在 `contracts/pages.py`（按转换符号变量名匹配，如 `page_from_plugin` / `page_to_internal`；该文件外出现即失败）
   - worker 内禁止 `asyncio.run`（CPU 路径禁事件循环）
-  - 业务代码禁止直接 `redis.xadd` / `boto3.client`（必须经 `store/`）
+  - 业务代码禁止直接 `redis.xadd` / `boto3.client`（必须经 `platform/store/`）
   - 算子禁止 IO（`open` / `requests` / db）
-  - 新增 defect code 必须同步 `repair/mapping.py`（枚举与映射表长度一致）
+  - 新增 defect code 必须同步 `pipeline/repair/mapping.py`（枚举与映射表长度一致）
+  - `pydantic_ai` 只允许出现在 `kernel/policies/model_*.py`（其余位置 grep 非空即失败）
   - 新增 FeatureVector 字段必须同步标定集（字段集哈希一致）
   - 所有 DDL 变更必须走 Alembic（migrations 与 models 一致）
   - 环境搭建与依赖安装只允许 `uv`：CI grep 校验仓库内安装脚本不得出现 `pip install` / `poetry` / `conda`；CI 用 `uv lock --check` 校验 `uv.lock` 与 `pyproject.toml` 一致
@@ -191,10 +213,10 @@ SYNC IMPACT REPORT（临时评审材料，提交前须移除）
 ## Governance
 
 - **本宪法是工程的最高约束**，优先于任何未写入的实践；它不重复 PRD 的完整内容，只锁定不可违反的工程规则。所有 PR / 评审必须验证与宪法的合规性，违反核心原则（确定性、可复现、内容哈希主键、单机多机同构、QC 独立）的改动直接打回。
-- **需求依据唯一性**：`doc/插件化异构数据处理 Agent 产品需求文档（PRD）V2.2.md`（2026-10-30 定稿）是唯一有效需求依据；V2.1 及此前版本已归档，不得与 V2.2 同时作为输入。`doc/pdf-inspector.md` 是 `engine.pdf` 插件能力的唯一接口依据。
+- **需求依据唯一性**：`doc/插件化异构数据处理 Agent 产品需求文档（PRD）V2.3.md`（2026-10-31 定稿）是唯一有效需求依据；V2.2 及此前版本已归档，不得与 V2.3 同时作为输入。`doc/pdf-inspector.md` 是 `engine.pdf` 插件能力的唯一接口依据。
 - **修订程序**：任何修订须先记录问题、评估影响、经评审批准、给出迁移说明，再落地；修订后更新本文档版本号，并把 Sync Impact Report 一并留档直至正式提交前移除。
 - **版本化政策**：语义化版本 `MAJOR.MINOR.PATCH`。MAJOR：不兼容的治理 / 原则移除或重定义；MINOR：新增原则或实质扩展；PATCH：澄清与措辞。`api_version` 与插件契约同步，仅破坏性变更才 +1。
 - **复现性承诺**：三类变更——插件版本 pin、阈值、缺陷码增减——会改变历史结果的可复现性，必须写入 `CHANGELOG.md` 并触发黄金集回归；`fast` 档的 STP 报告必须标注"不可用于验收"。
 - 每个 release 附 `CHANGELOG.md`，记录上述三类变更；未记录不得发布。
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
+**Version**: 1.2.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-31

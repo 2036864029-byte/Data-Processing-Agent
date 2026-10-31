@@ -96,7 +96,7 @@
 | `suggested_action` | 枚举 | 建议算子 |
 | `raw_reason` | string | 仅 `code = plugin_reason_unknown` 时必填，上游原因原样保留 |
 
-**规则**：**无 `location` 的缺陷不得入库、不进修复队列**，只能统计。码→算子映射写死在 `repair/mapping.py`，不允许运行时推断。
+**规则**：**无 `location` 的缺陷不得入库、不进修复队列**，只能统计。码→算子映射写死在 `pipeline/repair/mapping.py`，不允许运行时推断。
 
 ### PageGap（缺口记录）
 
@@ -151,9 +151,33 @@
 
 **规则**：禁"后加载覆盖先加载"（显式优先级决定）；禁插件间直接互调（必须经调度器）。
 
+### Plan（任务级执行计划）【新增】
+
+| 字段 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| `plan_version` | int | 版本；重规划产生新版本 |
+| `stages[]` | 数组 | `processing` / `decision` / `replan` 三种 stage kind（禁止自由图结构） |
+| `guards` | 结构 | `max_model_calls`（默认 8）、`max_replans`（默认 3）、`max_wall_time_s`（默认 3600） |
+| `frozen_at` | ts | 冻结时间 |
+| `created_by` | 枚举 | rule_template / model |
+
+**规则**：冻结后不可改；重放历史任务用同一 `plan_version` 结果逐字一致；分支条件用受限表达式、白名单仅限统计指标。
+
+### Decision（决策记录）【新增】
+
+| 字段 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| `plan_version` | int | 所属 Plan 版本 |
+| `stage_id` | str | 决策发生的 stage |
+| `metric_snapshot` | 结构 | 求值时的统计指标快照 |
+| `branch_taken` | str | 命中的分支 |
+
+**规则**：每次 `decision` stage 求值写一条；可审计、可重放。
+
 ## 关系
 
 ```text
+Task 1 — N Plan（重规划产生新 plan_version）1 — N Decision
 Task 1 — N Document 1 — N PageProfile 1 — N PageArtifact
 （同一页可有多个 artifact（不同引擎/参数），但同一幂等键只对应一个）
 
@@ -193,10 +217,11 @@ RulePack / PluginRegistration 独立于任务
 ## 校验规则汇总
 
 1. 主键：内容哈希（SHA-256），禁止自增 ID。
-2. 页码：系统内一律 1-indexed；转换只在 `extract/wrapper.py`。
+2. 页码：系统内一律 1-indexed；转换只在 `contracts/pages.py`。
 3. 缺陷：`code` 封闭集 + `location` 必填；`raw_reason` 仅在 `plugin_reason_unknown` 必填。
 4. 算子：幂等、不改原产物（返回新对象）。
 5. Action：`changed == false` → 立即停机，不重试同参数。
 6. PageProfile：两段写入，`route_reason` 原样保留。
 7. TaskSpec：JSON Schema 校验 + 预览确认；`page_filter` 禁引用 `extract_quality`。
 8. 档位 / 门控 / 路由判定：确定性规则，不由模型决定。
+9. Plan：3 种 stage kind 白名单；分支表达式仅限统计指标；冻结后不可改；任务级模型调用 ≤ `max_model_calls`（默认 8）。

@@ -26,7 +26,7 @@ PRD V2.2 与宪法已锁定绝大多数技术方向，本文件不重复论证�
 
 ### D1. `engine.pdf` 适配器与页码基准统一
 
-- **Decision**: 在 `plugins/adapters/pdf.py` 封装 pdf-inspector 为 `engine.pdf`；**页码字段级转换**（0-indexed ↔ 1-indexed）只发生在 `extract/wrapper.py` 一处，系统内部一律 1-indexed。
+- **Decision**: 在 `platform/plugins/adapters/pdf.py` 封装 pdf-inspector 为 `engine.pdf`；**页码字段级转换**（0-indexed ↔ 1-indexed）只发生在 `contracts/pages.py` 一处，系统内部一律 1-indexed。
 - **Rationale**: pdf-inspector 不同接口、甚至同一返回对象内部页码基准不一致（`extract_pages_markdown` 的 `pages[].page` 是 0-indexed，而同对象里的 `pages_with_tables` 是 1-indexed）；按字段级而非接口级转换是唯一正确做法（PRD 4.3.3 / D.6）。批量抽取必须一次传多页（`pages=[...]`），逐页调用会放大文件级固定开销。
 - **Alternatives considered**: 直接调用 pdf-inspector 原始接口（页码错乱风险）、接口级统一转换（仍会差一页）→ 均拒绝。
 - **验证锚点**：断言式单元测试 `extract_pages_markdown(path, pages=[k])` 后 `pages[0].page == k` 且 `k+1 in pages_with_tables`（宪法六个必写测试 #1）。
@@ -79,6 +79,18 @@ PRD V2.2 与宪法已锁定绝大多数技术方向，本文件不重复论证�
 - **Decision**: json-logic 受限表达式（白名单字段 / 白名单函数，沙箱求值，无代码执行）；RulePack 与 `scope.page_filter` 共用同一引擎；禁 `page_filter` 引用 `extract_quality`（因果循环）。
 - **Rationale**: PRD 4.6.2 / 4.1.4 规则 3；宪法「受限表达式」。
 - **Alternatives considered**: 开放任意代码 → 拒绝（用户侧只能写数据不能写代码，PRD 4.6.4）。
+
+### D10. 为什么不用图编排框架（LangGraph / pydantic_graph）
+
+- **Decision**: 不引入图编排框架；Plan 的 3 种 stage kind（processing / decision / replan）由 `kernel/plan.py` 自实现，禁止自由图结构。
+- **Rationale**: 框架的 durable execution 与既有续跑设计（`resume_point` + 批级事务 + outbox，FR-020 / SC-010）是**两套状态源，只能二选一**；选框架等于推翻续跑承诺。自实现 3 种 stage kind 可保证"同一 `plan_version` 重放逐字一致"。
+- **Alternatives considered**: LangGraph、pydantic_graph → 拒绝（状态源冲突 + 可复现性失控风险）。
+
+### D11. Pydantic AI 引入边界（任务级模型调用）
+
+- **Decision**: **仅** `kernel/policies/model_*.py`（3 个任务级模型实现）内部使用；不用于编排 / 状态 / 续跑；锁精确版本进 `uv.lock`；CI 门禁 `grep -rn "pydantic_ai" src/ | grep -v "kernel/policies/model_"` 非空即失败。
+- **Rationale**: 提供结构化输出校验、类型安全、失败重试、调用计量；框架 API 变更风险通过「锁版本 + 仅 3 文件引用 + 失败可回退裸 HTTP（Protocol 不变）」控制（规划 R4）。
+- **Alternatives considered**: 裸 HTTP 调用（保留为回退路径）；LangChain（宪法禁止引入）。
 
 ## 开放研究项（进入实现期）
 
