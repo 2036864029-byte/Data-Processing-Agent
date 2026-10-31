@@ -6,7 +6,7 @@
 
 ## Summary
 
-本计划覆盖 PRD V2.2 的 **P0（MVP）全部模块**：接入（文件夹 + 上传）、文件级体检、两级路由、PDF / CSV / TXT 插件化解析、页面画像、分级兜底、T1 后处理、四层质检、缺陷码与增强回路、RulePack、合并输出、分级交付、续跑、资源预检、存储抽象、插件注册表、CLI / 容器交付。
+本计划覆盖 PRD V2.3 的 **P0（MVP）全部模块**：接入（文件夹 + 上传）、文件级体检、两级路由、PDF / CSV / TXT 插件化解析、页面画像、分级兜底、T1 后处理、四层质检、缺陷码与增强回路、RulePack、合并输出、分级交付、续跑、资源预检、存储抽象、插件注册表、CLI / 容器交付。
 
 技术路线一句话：**一条确定性流水线：页级决策全部规则 + 任务级模型调用**（≤3 处、每任务 ≤8 次，PRD V2.3）。PDF 分类与抽取复用 pdf-inspector（`engine.pdf` 插件，双 capability）；**T1 后处理是 P0 最大自建项**；**基础支撑模块（配置 / 状态机 / 存储抽象 / 注册表 / 续跑 / CLI 骨架 / 测试基建）先行**，功能模块在它们之上开发。
 
@@ -22,9 +22,9 @@
 | -- | ---- | ---- | ---- |
 | A1 | 工程底座：`pyproject.toml` + uv + 目录骨架 + CI 门禁（lint / mypy / pytest）+ TDD 基建 | 仓库根 | 一切 |
 | A2 | 核心机制：配置单一 schema（pydantic-settings）、状态机唯一转移表、内容哈希 / uuidv7、错误码封闭集、三层预算 | `kernel/state.py` `kernel/budget.py` `contracts/ids.py` `contracts/errors.py` | 一切 |
-| A3 | 全局共享机制：页码基准转换点 `contracts/pages.py`（全工程仅一处，1-indexed）、缺陷码→算子映射 `pipeline/repair/mapping.py`（写死） | `contracts/pages.py` `pipeline/repair/mapping.py` | 路由 / 质检 / 修复 |
+| A3 | 全局共享机制：页码基准转换点 `contracts/pages.py`（全工程仅一处，1-indexed）、缺陷码→算子映射 `pipeline/repair/mapping.py`（写死） | `contracts/pages.py` `contracts/defects.py` `pipeline/repair/mapping.py` | 路由 / 质检 / 修复 |
 | A4 | 存储抽象：对象存储双实现（本地盘 + S3）、队列最小语义（至少一次 + 手动确认 + 死信）、SQL 标准子集 + Alembic 迁移 | `platform/store/` `migrations/` | 接入 / 解析 / 续跑 |
-| A5 | 插件注册表与加载器：能力索引 / 启停 / 版本锁定 / 依赖与兼容性校验 / 多实现显式优先级；热路径同进程、冷路径沙箱 | `kernel/registry.py` `platform/plugins/` `contracts/plugin.py` | 路由 / 解析 / 质检 |
+| A5 | 插件注册表与加载器：能力索引 / 启停 / 版本锁定 / 依赖与兼容性校验 / 多实现显式优先级；热路径同进程、冷路径沙箱 | `kernel/registry.py` `platform/plugins/` `contracts/plugin.py` `platform/runtime/sandbox.py` | 路由 / 解析 / 质检 |
 | A6 | 续跑与资源预检：落盘分层、批级事务边界、进程池隔离、心跳按进展判定、启动自检 + 建议值 + OOM 降批链 | `kernel/supervisor.py` `platform/runtime/` | 全部长任务 |
 | A7 | 交付骨架：CLI（up / status / logs / plugin / doctor）+ `/status` 只读页 + Docker Compose + worker 进程壳 | `apps/cli/` `apps/api/` `apps/worker/` `deploy/` | 验收 / 交付 |
 | A8 | 决策点策略化：8 个决策点 Policy 接口 + 页级规则实现 + 任务级配置开关（P0 规则阈值，M3 模型） | `contracts/policies.py` `kernel/policies/` | 路由 / 质检 / 修复 / 任务规划 |
@@ -46,6 +46,7 @@
 | B7 | 合并（跨页表 / 标题层级 / 文档级校验）+ 分级交付 + 报告分层 + 输出 | `pipeline/merge/` `pipeline/output/` | A4 B5 B6 |
 | B8 | RulePack + 受限表达式引擎 + `scope.page_filter` + 字段提取三层（P0 只做声明式层） | `platform/rules/` | A2 B3 |
 | B9 | 黄金集（200 页）+ 标定脚本 + `extract_quality` 标定 + 评测 | `tests/` `pipeline/quality/` | B5 |
+| B-PLAN | 任务级执行规划：Plan 解析 / 冻结 / 分支求值（FR-026，3 种 stage kind，禁自由图） | `kernel/plan.py` | A2 A8 B8 |
 
 **验收锚点（M2 / M3）**：7.1 #9–#14、#17、#22–#28、#29；7.2 全部（黄金集标定、STP ≥ 80%、误放率 ≤ 2%、QC 自身达标）。
 
@@ -163,6 +164,6 @@ docs/                          # ADR 记录
 | `research.md` | 关键技术决策（Decision / Rationale / Alternatives）与开放研究项 |
 | `data-model.md` | 13 个实体 + 关系 + 状态机 + 主键铁律 + 校验规则 |
 | `contracts/` | 7 份接口契约（TaskSpec / 插件 manifest / 角色消息 / QC 输出 / 缺陷码 / CLI+API / Policies） |
-| `quickstart.md` | 端到端可运行验证场景（对应 spec 的 6 个用户故事） |
+| `quickstart.md` | 端到端可运行验证场景（对应 spec 的 5 个用户故事 + FR-026 场景） |
 
 **Constitution Check 复检**：Phase 1 设计未引入任何违反 G1–G10 的结构（角色消息限定三条、缺陷码封闭集、内容哈希主键、批级事务、uv 门禁、页码单一转换点），门禁保持通过。

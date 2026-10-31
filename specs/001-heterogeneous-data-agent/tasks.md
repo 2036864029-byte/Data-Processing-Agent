@@ -1,24 +1,24 @@
 ---
 
-description: "P0-A 基础支撑层任务清单（A1–A8 + 集成门禁，对应里程碑 M1）"
+description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应里程碑 M1）"
 ---
 
 # Tasks: 插件化异构数据处理 Agent（DataAgent）— P0-A 基础支撑层
 
 **Input**: Design documents from `/specs/001-heterogeneous-data-agent/`
 
-**Prerequisites**: plan.md（执行优先级 A1–A8）、spec.md、research.md（D3/D10/D11 决策）、data-model.md（13 实体 + 状态机 + 主键铁律）、contracts/（7 份契约）、宪法 1.2.0（`.specify/memory/constitution.md`，5 层包结构 + G1–G10 门禁）
+**Prerequisites**: plan.md（执行优先级 A1–A9）、spec.md、research.md（D3/D10/D11 决策）、data-model.md（13 实体 + 状态机 + 主键铁律）、contracts/（7 份契约）、宪法 1.2.0（`.specify/memory/constitution.md`，5 层包结构 + G1–G10 门禁）
 
 **Tests**: 本项目宪法 G8 强制 TDD（测试先行、核心模块覆盖率 ≥ 90%），故每个模块 Phase 均含**先红后绿**的测试任务。
 
-**Organization**: 按 plan「执行优先级与里程碑」组织——P0-A 基础支撑层（A1–A8）每一模块为一个独立可测 Phase；P0-B 功能模块层（B1–B9）**不在此文件**，见 `tasks-p0-b.md`（任务编号承接本文自 T067 起，两份文件合为**完整 P0 任务图**，均在实现开始前完成）。
+**Organization**: 按 plan「执行优先级与里程碑」组织——P0-A 基础支撑层（A1–A9）每一模块为一个独立可测 Phase；P0-B 功能模块层（B1–B9）**不在此文件**，见 `tasks-p0-b.md`（任务编号承接本文自 T073 起，两份文件合为**完整 P0 任务图**，均在实现开始前完成）。
 
-**Scope 说明**：A1–A8 是串行依赖链（A1 底座 → A2 核心 → A3 共享 → A4 存储 → A5 注册表 → A6 续跑 → A7 交付骨架 → A8 策略化），本文件按此顺序执行；模块内标记 [P] 的任务可并行。
+**Scope 说明**：A1–A9 是串行依赖链（A1 底座 → A2 核心 → A3 共享 → A4 存储 → A5 注册表 → A6 续跑 → A7 交付骨架 → A8 策略化 → A9 可观测），本文件按此顺序执行；模块内标记 [P] 的任务可并行。
 
 ## Format: `[ID] [P?] [Module] Description`
 
 - **[P]**: 可并行（不同文件、无依赖）
-- **[Module]**: 所属 A 模块（A1–A8），用于可追溯性；Setup 与集成收尾阶段无标签
+- **[Module]**: 所属 A 模块（A1–A9），用于可追溯性；Setup 与集成收尾阶段无标签
 - 描述含精确文件路径
 
 ## 路径约定
@@ -67,7 +67,7 @@ description: "P0-A 基础支撑层任务清单（A1–A8 + 集成门禁，对应
 - [ ] T012 [P] [A2] 实现 `src/dataagent/contracts/ids.py` — 内容哈希（SHA-256）与 uuidv7；幂等键 = `hash(文件) + 页范围 + 引擎 + 参数 + 规则包版本`（主键铁律：**文档与页产物主键必须是内容哈希，不得使用自增 ID**）
 - [ ] T013 [P] [A2] 实现 `src/dataagent/contracts/errors.py` — 错误码封闭集枚举（无内部依赖叶子模块）
 - [ ] T014 [P] [A2] 实现 `src/dataagent/kernel/state.py` — 状态机唯一合法转移表（纯映射、无副作用；含 REJECTED / ESCALATED 终态；不新增恢复状态）
-- [ ] T015 [P] [A2] 实现 `src/dataagent/kernel/budget.py` — 三层预算（成本 / 次数 / 耗时）扣减与耗尽判定
+- [ ] T015 [P] [A2] 实现 `src/dataagent/kernel/budget.py` — 三层预算（成本 / 次数 / 耗时）扣减与耗尽判定；档位成本扣减规则（FR-008）：后处理 0 次、参数重跑 1 次、换引擎 2 次
 - [ ] T016 [A2] 实现 `src/dataagent/platform/config.py` — 单一配置 schema（pydantic-settings）
 
 **Checkpoint**: A2 单测全绿 → commit + push
@@ -215,17 +215,39 @@ description: "P0-A 基础支撑层任务清单（A1–A8 + 集成门禁，对应
 
 ---
 
-## Phase 9: P0-A 集成门禁与收尾
+## Phase 9: A9 可观测与审计
+
+**Goal**: 结构化日志 + span、指标采集（处理量 / STP 率 / 误放率 / 单页成本 / 档位分布 / 后处理命中率 / 时延 / 复杂页占比）、审计留痕、异常告警（FR-025）。**全部链路依赖。**
+
+**Independent Test**: FR-025 指标清单逐项有采集点与口径；操作留痕可追溯；告警为旁路、不阻塞主链路。
+
+### 测试（TDD：先红后绿）⚠️
+
+- [ ] T062 [A9] 观测基础测试 `tests/unit/platform/observe/test_observe.py` — 结构化日志 + span 上下文；FR-025 指标清单（处理量 / STP 率 / 误放率 / 单页成本 / 档位分布 / 后处理命中率 / 时延 / 复杂页占比）逐项断言采集点与口径
+- [ ] T063 [A9] 告警测试 `tests/unit/platform/observe/test_alerts.py` — 异常触发（STP 跌破阈值 / 换引擎占比异常上涨 / 队列积压 / 节点离线 / 失败分布漂移 / `plugin_reason_unknown` 占比 > 5%）；告警为旁路、不阻塞主链路
+
+### 实现 A9
+
+- [ ] T064 [P] [A9] 实现 `src/dataagent/platform/observe/log.py` — 结构化日志 + span 上下文
+- [ ] T065 [P] [A9] 实现 `src/dataagent/platform/observe/metrics.py` — 指标采集（口径定义 + 落库 / 暴露）
+- [ ] T066 [A9] 实现 `src/dataagent/platform/observe/audit.py` — 操作留痕（接入 / 配置 / 规则变更 / 人工修正全部可追溯，FR-025）
+- [ ] T067 [A9] 实现告警规则与触发点 — 接入 supervisor 与报告生成处；`plugin_reason_unknown` 计数联动 B6（占比 > 5% 告警，US4 #3）
+
+**Checkpoint**: 观测 / 告警测试全绿 → commit + push
+
+---
+
+## Phase 10: P0-A 集成门禁与收尾
 
 **Purpose**: 证明基础支撑层整体成立，解锁 P0-B；工程门禁与工作流收尾。
 
 **Independent Test**: P0-A 全部单测 + 集成全绿；`dataagent doctor / up` + `/status` + `plugin list` + 故障注入续跑演示全过（验收锚点 M1 中注册表 / CLI 唯一入口 / 续跑）。
 
-- [ ] T062 跑 P0-A 集成验证（quickstart 子集）：空库 `docker compose up -d` → `dataagent doctor` → `dataagent up` → `/status` 渲染 → `plugin list` → kill -9 worker 续跑演示（对应验收锚点 M1：注册表、CLI 唯一入口、续跑）
-- [ ] T063 回归必写测试盘点：**#1 页码基准（A3 已覆盖）、#5 主键内容哈希 / 幂等键（A2/A4 已覆盖）** 在 P0-A 全绿；#2 未知原因透传、#3 算子幂等、#4 无进展停机、#6 回路收敛属 `pipeline/repair/`（P0-B B6），列入 P0-B 验收清单
-- [ ] T064 [P] 初始化 `docs/CHANGELOG.md`（三类可复现性变更记录框架：插件版本 pin / 阈值 / 缺陷码增减，宪法「复现性承诺」）+ README 快速开始（uv sync + compose + doctor + up）
-- [ ] T065 [P] ADR 记录：`docs/ADR/` 记录 P0-A 关键实现决策（sandbox 归 A5、`pages.py` 转换符号命名、P0-A 单文件任务拆分口径）
-- [ ] T066 全量回归 + 收尾：CI 四件套 + import-linter + 全部 grep 门禁一次跑绿；最终 commit + push
+- [ ] T068 跑 P0-A 集成验证（quickstart 子集）：空库 `docker compose up -d` → `dataagent doctor` → `dataagent up` → `/status` 渲染 → `plugin list` → kill -9 worker 续跑演示（对应验收锚点 M1：注册表、CLI 唯一入口、续跑）
+- [ ] T069 回归必写测试盘点：**#1 页码基准（A3 已覆盖）、#5 主键内容哈希 / 幂等键（A2/A4 已覆盖）** 在 P0-A 全绿；#2 未知原因透传、#3 算子幂等、#4 无进展停机、#6 回路收敛的 P0-B 全量盘点见 `tasks-p0-b.md` T126（单向引用，避免两处维护）
+- [ ] T070 [P] 初始化 `docs/CHANGELOG.md`（三类可复现性变更记录框架：插件版本 pin / 阈值 / 缺陷码增减，宪法「复现性承诺」）+ README 快速开始（uv sync + compose + doctor + up）
+- [ ] T071 [P] ADR 记录：`docs/ADR/` 记录 P0-A 关键实现决策（sandbox 归 A5、`pages.py` 转换符号命名、A9 可观测模块、P0-A 单文件任务拆分口径）
+- [ ] T072 全量回归 + 收尾：CI 四件套 + import-linter + 全部 grep 门禁一次跑绿；最终 commit + push
 
 **Checkpoint**: 集成门禁全绿 → **解锁 P0-B**（B1–B9 任务已分解于 `tasks-p0-b.md`，可开始实现）
 
@@ -243,12 +265,14 @@ description: "P0-A 基础支撑层任务清单（A1–A8 + 集成门禁，对应
 - **A6（Phase 6）**: 依赖 A4 + A5（supervisor 用存储 + 注册表）
 - **A7（Phase 7）**: 依赖 A1 + A6（worker 壳调 kernel；up 拉起后端）
 - **A8（Phase 8）**: 依赖 A2 + A3（OperatorPolicy 读 mapping；任务级阈值）
-- **Phase 9（集成门禁）**: 依赖 A1–A8 全部完成
+- **A9（Phase 9）**: 依赖 A2 + A7（指标采集点、日志 / status 骨架）；可与 A8 并行
+- **Phase 10（集成门禁）**: 依赖 A1–A9 全部完成
 
 ### 并行机会
 
 - Phase 1 内 T002–T005 可并行；Phase 2 内 T008/T009（contracts 两个文件）可并行、T012–T015 可并行；Phase 3 内 T020 与 T017–T019 可并行；Phase 4 内 T026 与 T025 依序、T029 可并行；Phase 5 内 T034/T035 与 T036 可并行；Phase 6 内 T041/T042 与 T043 依序；Phase 7 内 T048/T050 与 T047 依序；Phase 8 内 T055–T059 五个页级规则实现全部并行
 - A4 与 A2/A3 无依赖，可在 A2 完成后与 A3 并行推进（人手允许时）
+- A9（可观测与审计）与 A8 无相互依赖，可与 A8 并行推进
 
 ### 每个 Phase 内
 
@@ -278,15 +302,16 @@ Task: "实现 src/dataagent/kernel/budget.py"
 6. 完成 A6 → 故障注入续跑全绿 → commit + push
 7. 完成 A7 → Docker 环境起停全绿 → commit + push
 8. 完成 A8 → 页级确定性全绿 → commit + push
-9. **STOP and VALIDATE**: 跑 Phase 9 集成门禁 → 通过后解锁 P0-B（任务已分解于 `tasks-p0-b.md`，按 B1→B9 顺序实现）
+9. 完成 A9（可观测与审计）→ 观测 / 告警测试全绿 → commit + push
+10. **STOP and VALIDATE**: 跑 Phase 10 集成门禁 → 通过后解锁 P0-B（任务已分解于 `tasks-p0-b.md`，按 B1→B9 顺序实现）
 
 ### 并行团队策略（多人时）
 
 1. 团队先完成 A1
 2. A2 与 A4 可并行（A4 仅依赖 A1）
 3. A3 随 A2 之后；A5 随 A2 之后
-4. A6 = A4 + A5 汇合；A7 = A6 之后；A8 可与 A6 并行（仅依赖 A2/A3）
-5. 最后统一跑 Phase 9 集成门禁
+4. A6 = A4 + A5 汇合；A7 = A6 之后；A8 可与 A6 并行（仅依赖 A2/A3）；A9 可与 A8 并行（依赖 A2 + A7）
+5. 最后统一跑 Phase 10 集成门禁
 
 ---
 
