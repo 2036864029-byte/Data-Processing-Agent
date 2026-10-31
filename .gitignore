@@ -7,6 +7,12 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.import_linter_cache/
+*.log
 
 # Personal session memory (not shared)
 .workbuddy/

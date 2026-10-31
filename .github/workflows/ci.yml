@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    name: Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv（Python 3.12）
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: uv lock --check（G7：uv.lock 与 pyproject.toml 一致）
+        run: uv lock --check
+
+      - name: uv sync
+        run: uv sync
+
+      - name: ruff lint
+        run: uv run ruff check .
+
+      - name: mypy（kernel / platform.store / pipeline.repair 严格）
+        run: uv run mypy src/dataagent
+
+      - name: pytest（TDD，全局覆盖率 ≥ 80%）
+        run: uv run pytest --cov-fail-under=80
+
+      - name: 核心模块覆盖率 ≥ 90%（kernel / platform.store / pipeline.repair）
+        run: |
+          if ls src/dataagent/kernel/*.py src/dataagent/platform/store/*.py src/dataagent/pipeline/repair/*.py 2>/dev/null | grep -q .; then
+            coverage report --fail-under=90 \
+              --include="src/dataagent/kernel/**,src/dataagent/platform/store/**,src/dataagent/pipeline/repair/**"
+          else
+            echo "核心模块尚未实现，本步跳过"
+          fi
+
+      - name: import-linter（分层单向依赖，反向即失败）
+        run: PYTHONPATH=src uv run lint-imports
+
+      - name: 门禁脚本（G9 grep 校验）
+        run: bash scripts/check-gates.sh

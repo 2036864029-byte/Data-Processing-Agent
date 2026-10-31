@@ -1,0 +1,104 @@
+[project]
+name = "dataagent"
+version = "0.1.0"
+description = "插件化异构数据处理 Agent（DataAgent）— 确定性流水线：页级决策全部规则 + 任务级模型调用（PRD V2.3）"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.1",
+    "json-logic>=0.6.3",
+    "pydantic>=2.14.2",
+    "pydantic-settings>=2.16.2",
+    "sqlalchemy>=2.1.6",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.170.14",
+    "import-linter>=2.15",
+    "minio>=7.2.20",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "redis>=8.1.0",
+    "ruff>=0.17.3",
+    "testcontainers>=4.15.0",
+]
+
+# ──────────────────────────────────────────────────────────────
+# 工具配置（T003：ruff / mypy / coverage / pytest / import-linter）
+# ──────────────────────────────────────────────────────────────
+
+# ruff：lint
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "scripts"]
+exclude = [".specify", "specs", "doc", "deploy", ".workbuddy", ".github", "migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "ASYNC"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dataagent"]
+
+# mypy：核心模块（kernel / platform.store / pipeline.repair）严格，其余默认
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "dataagent.kernel",
+    "dataagent.kernel.*",
+    "dataagent.platform.store",
+    "dataagent.platform.store.*",
+    "dataagent.pipeline.repair",
+    "dataagent.pipeline.repair.*",
+]
+strict = true
+
+# coverage：单元行覆盖——其余 ≥ 80%；核心模块（kernel / platform.store / pipeline.repair）≥ 90%
+# （宪法「测试分层与目标」。阈值在 CI 强制执行：全局 ≥80% 见 pytest 步骤 --cov-fail-under；
+#   核心模块 ≥90% 以 include 限定方式单独校验，见 ci.yml。）
+[tool.coverage.run]
+source = ["dataagent"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
+# pytest：TDD 基建（tests/conftest.py 夹具 + 分层目录）
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--cov=dataagent --cov-report=term-missing:skip-covered"
+markers = [
+    "integration: 需要 Docker（testcontainers 起 PG / Redis / MinIO）",
+    "e2e: 200 页黄金集端到端评测",
+    "fault: 故障注入（kill -9 / 断网 / 磁盘满 / 毒丸 / OOM）",
+    "bench: 性能基准（单页 p50/p95、吞吐、内存峰值）",
+]
+
+# import-linter：分层单向依赖，反向依赖即失败（G9）
+[tool.importlinter]
+root_package = "dataagent"
+
+[[tool.importlinter.contracts]]
+name = "分层单向依赖（apps → pipeline → kernel → platform → contracts）"
+type = "layers"
+layers = [
+    "dataagent.apps",
+    "dataagent.pipeline",
+    "dataagent.kernel",
+    "dataagent.platform",
+    "dataagent.contracts",
+]
