@@ -212,11 +212,11 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T120 [BPLAN] Plan 解析 / 冻结 / 分支求值测试 `tests/unit/kernel/test_plan.py` — 3 种 stage kind 白名单（`processing` / `decision` / `replan`）、禁止自由图结构（PRD 4.1.9）；分支表达式用受限表达式引擎、白名单仅限统计指标、引用未知指标生成期拒绝（taskspec 校验规则 8）；`guards` 三项硬上限：`max_model_calls`（默认 8）/ `max_replans`（默认 3）/ `max_wall_time_s`（默认 3600），超出即停止交付带缺口结果（校验规则 9）；冻结后不可改；同一 `plan_version` 重放逐字一致
+- [X] T120 [BPLAN] Plan 解析 / 冻结 / 分支求值测试 `tests/unit/kernel/test_plan.py` — 3 种 stage kind 白名单（`processing` / `decision` / `replan`）、禁止自由图结构（PRD 4.1.9）；分支表达式用受限表达式引擎、白名单仅限统计指标、引用未知指标生成期拒绝（taskspec 校验规则 8）；`guards` 三项硬上限：`max_model_calls`（默认 8）/ `max_replans`（默认 3）/ `max_wall_time_s`（默认 3600），超出即停止交付带缺口结果（校验规则 9）；冻结后不可改；同一 `plan_version` 重放逐字一致
 
 ### 实现 B-PLAN
 
-- [ ] T121 [BPLAN] 实现 `src/dataagent/kernel/plan.py` — Plan 解析 / 冻结 / 分支求值；分支条件复用 `platform/rules/expr.py` 受限表达式；重规划产生新 `plan_version` 可 diff
+- [X] T121 [BPLAN] 实现 `src/dataagent/kernel/plan.py` — Plan 解析 / 冻结 / 分支求值；分支条件复用 `platform/rules/expr.py` 受限表达式；重规划产生新 `plan_version` 可 diff
 
 **Checkpoint**: Plan 冻结 / 重放测试全绿 → commit + push
 
