@@ -191,14 +191,14 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T115 [B8] 规则包测试 `tests/unit/platform/rules/test_rulepack.py` — YAML 纯数据、JSON Schema 校验、冲突发布阻断、回滚、dry-run（FR-014）；每条规则可追溯原始需求文本（FR-016 编译链路为 P1，P0 只做规则包本身）
-- [ ] T116 [B8] 受限表达式引擎测试 — 白名单字段 / 白名单函数、沙箱求值**无代码执行**；`page_filter` / `skip_pages` 与 RulePack 同一套引擎；**禁 `page_filter` 引用 `extract_quality`**（因果循环，taskspec 校验规则 3）
+- [X] T115 [B8] 规则包测试 `tests/unit/platform/rules/test_rulepack.py` — YAML 纯数据、JSON Schema 校验、冲突发布阻断、回滚、dry-run（FR-014）；每条规则可追溯原始需求文本（FR-016 编译链路为 P1，P0 只做规则包本身）
+- [X] T116 [B8] 受限表达式引擎测试 — 白名单字段 / 白名单函数、沙箱求值**无代码执行**；`page_filter` / `skip_pages` 与 RulePack 同一套引擎；**禁 `page_filter` 引用 `extract_quality`**（因果循环，taskspec 校验规则 3）
 
 ### 实现 B8
 
-- [ ] T117 [B8] 实现 `src/dataagent/platform/rules/rulepack.py` — 规则包校验 / 版本化 / 回滚 / dry-run
-- [ ] T118 [B8] 实现 `src/dataagent/platform/rules/expr.py` — json-logic 受限表达式引擎（沙箱求值、白名单字段 / 函数）
-- [ ] T119 [B8] 实现 `src/dataagent/platform/rules/extract.py` — 字段提取三层之声明式锚点层（P0 只做声明式层；模板按坐标 / 模型兜底为后续）
+- [X] T117 [B8] 实现 `src/dataagent/platform/rules/rulepack.py` — 规则包校验 / 版本化 / 回滚 / dry-run
+- [X] T118 [B8] 实现 `src/dataagent/platform/rules/expr.py` — json-logic 受限表达式引擎（沙箱求值、白名单字段 / 函数）
+- [X] T119 [B8] 实现 `src/dataagent/platform/rules/extract.py` — 字段提取三层之声明式锚点层（P0 只做声明式层；模板按坐标 / 模型兜底为后续）
 
 **Checkpoint**: 规则包 / 表达式测试全绿 → commit + push
 
