@@ -142,19 +142,19 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T098 [B6] 必写测试 #2 未知原因透传 — 映射表外 `reason` → `plugin_reason_unknown`，`raw_reason` **原样保留**，不得丢弃、不得凭猜测归入邻近码（G2）
-- [ ] T099 [B6] 必写测试 #3 算子不可变且幂等 — 原产物不变、两次调用候选一致（算子返回新对象，禁修改原产物）
-- [ ] T100 [B6] 必写测试 #4 无进展停机 — `OperatorResult.changed == false` 立即放弃、不重试第二次、不得重试同参数（G5）
-- [ ] T101 [B6] 必写测试 #6 增强回路收敛 — 同码唯一、三层预算（成本 / 次数 / 耗时）耗尽后升级、无无限循环
-- [ ] T102 [B6] 增强器降级测试 — 外部增强器不可用时按配置降级（**默认仅标记 mark_only**），报告显式声明所用降级路径（FR-013）；`fallback.enhancer` 必须是配置项不得写死（taskspec 校验规则 5）
-- [ ] T103 [B6] 失败页聚包测试 — 散落失败页聚合成包（50–100 页一包）送外部增强器，只抽失败页不重跑整个文件；页码映射落盘并参与幂等（FR-012）
+- [X] T098 [B6] 必写测试 #2 未知原因透传 — 映射表外 `reason` → `plugin_reason_unknown`，`raw_reason` **原样保留**，不得丢弃、不得凭猜测归入邻近码（G2）
+- [X] T099 [B6] 必写测试 #3 算子不可变且幂等 — 原产物不变、两次调用候选一致（算子返回新对象，禁修改原产物）
+- [X] T100 [B6] 必写测试 #4 无进展停机 — `OperatorResult.changed == false` 立即放弃、不重试第二次、不得重试同参数（G5）
+- [X] T101 [B6] 必写测试 #6 增强回路收敛 — 同码唯一、三层预算（成本 / 次数 / 耗时）耗尽后升级、无无限循环
+- [X] T102 [B6] 增强器降级测试 — 外部增强器不可用时按配置降级（**默认仅标记 mark_only**），报告显式声明所用降级路径（FR-013）；`fallback.enhancer` 必须是配置项不得写死（taskspec 校验规则 5）
+- [X] T103 [B6] 失败页聚包测试 — 散落失败页聚合成包（50–100 页一包）送外部增强器，只抽失败页不重跑整个文件；页码映射落盘并参与幂等（FR-012）
 
 ### 实现 B6
 
-- [ ] T104 [B6] 实现 reason→defect_code 配置映射表 — 可配、按插件版本分组；未知 reason 一律落 `plugin_reason_unknown`；`defect_code` 不反推 `reason`（单向）；映射只做一次（defect-codes.md 两张映射表）；`plugin_reason_unknown` 计数进运营指标、单次任务占比 > 5% 触发告警（接入 A9 T067 告警，US4 #3）
-- [ ] T105 [B6] 实现 T1 后处理算子库 `src/dataagent/pipeline/repair/operators/` — `rebuild_table_cells` / `strip_header_footer` / `merge_cross_page_table` / `reorder_blocks` / `resegment_columns` / `rotate_page` / `deskew` / `extract_region` / `ocr_page`（默认算子与档位逐字引用 defect-codes.md）；算子幂等、不改原产物、**禁止 IO**（G9 grep 门禁）
-- [ ] T106 [B6] 实现增强回路 — 同码唯一、三层停机（`changed == false` 停机）、预算耗尽升级；采纳候选必须带来可量化指标提升（≥5%）
-- [ ] T107 [B6] 实现失败页聚包 + 降级路径 — 50–100 页聚包送增强器 + 页码映射落盘；降级框架（`mark_only` 默认 / `local_ocr` / `fail_doc`）；`local_ocr` 增强器接入属 P1，P0 只做降级框架；**复杂页收口（抽子集 → 聚包 → 页码回填）归 B6**（data-model PageGap 进入收口流程）
+- [X] T104 [B6] 实现 reason→defect_code 配置映射表 — 可配、按插件版本分组；未知 reason 一律落 `plugin_reason_unknown`；`defect_code` 不反推 `reason`（单向）；映射只做一次（defect-codes.md 两张映射表）；`plugin_reason_unknown` 计数进运营指标、单次任务占比 > 5% 触发告警（接入 A9 T067 告警，US4 #3）
+- [X] T105 [B6] 实现 T1 后处理算子库 `src/dataagent/pipeline/repair/operators/` — `rebuild_table_cells` / `strip_header_footer` / `merge_cross_page_table` / `reorder_blocks` / `resegment_columns` / `rotate_page` / `deskew` / `extract_region` / `ocr_page`（默认算子与档位逐字引用 defect-codes.md）；算子幂等、不改原产物、**禁止 IO**（G9 grep 门禁）
+- [X] T106 [B6] 实现增强回路 — 同码唯一、三层停机（`changed == false` 停机）、预算耗尽升级；采纳候选必须带来可量化指标提升（≥5%）
+- [X] T107 [B6] 实现失败页聚包 + 降级路径 — 50–100 页聚包送增强器 + 页码映射落盘；降级框架（`mark_only` 默认 / `local_ocr` / `fail_doc`）；`local_ocr` 增强器接入属 P1，P0 只做降级框架；**复杂页收口（抽子集 → 聚包 → 页码回填）归 B6**（data-model PageGap 进入收口流程）
 
 **Checkpoint**: 四个必写测试 + 降级 / 聚包测试全绿 → commit + push
 

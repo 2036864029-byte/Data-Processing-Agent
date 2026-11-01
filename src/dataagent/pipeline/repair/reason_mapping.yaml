@@ -1,0 +1,12 @@
+# reason → defect_code 配置表（可变；按插件版本分组）。
+# 未知 reason 一律落 plugin_reason_unknown，raw_reason 原样保留；
+# 上游升级新增 reason 自动落入未知桶（报告可看出升级影响）。
+
+engine.pdf:
+  "1.0.0":
+    low_char_density: low_density
+    no_text_layer: low_density
+    encoding_issue: encoding_loss
+    broken_encoding: encoding_loss
+    page_rotated: page_rotated
+    rotation: page_rotated
