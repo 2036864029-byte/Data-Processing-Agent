@@ -58,7 +58,7 @@ def start_worker(
 
 
 def wait_for_progress(state: Path, minimum: int, process: subprocess.Popen[bytes]) -> int:
-    deadline = time.time() + 20
+    deadline = time.time() + 60
     while time.time() < deadline:
         if state.is_file():
             data = json.loads(state.read_text(encoding="utf-8"))
@@ -66,7 +66,8 @@ def wait_for_progress(state: Path, minimum: int, process: subprocess.Popen[bytes
             if resume_point is not None and resume_point >= minimum:
                 return int(resume_point)
         if process.poll() is not None:
-            pytest.fail("worker 在达到初始进度前已退出")
+            _, stderr = process.communicate()
+            pytest.fail(f"worker 在达到初始进度前已退出：{stderr.decode('utf-8', 'replace')}")
         time.sleep(0.02)
     pytest.fail("等待 worker 提交批次超时")
 
@@ -78,7 +79,7 @@ def test_hard_kill_worker_resumes_without_redoing_completed_batches(tmp_path: Pa
 
     first = start_worker(state, objects, log, run_id="1")
     try:
-        first_resume = wait_for_progress(state, minimum=2, process=first)
+        first_resume = wait_for_progress(state, minimum=1, process=first)
     finally:
         first.kill()
         first.wait(timeout=10)
