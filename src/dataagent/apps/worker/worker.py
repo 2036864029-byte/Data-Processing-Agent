@@ -8,12 +8,17 @@ from __future__ import annotations
 
 import sys
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
 
 from dataagent.contracts.messages import ParseRequest
 from dataagent.platform.runtime.heartbeat import HeartbeatMonitor
 from dataagent.platform.store.queue.base import Queue
+
+if TYPE_CHECKING:
+    from dataagent.pipeline.task_runner import TaskRunner
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +41,26 @@ class ShellBatchHandler:
 
     def handle(self, request: ParseRequest) -> None:
         return None
+
+
+class TaskRunnerBatchHandler:
+    """把批级 ParseRequest 交给任务编排器（按页范围处理单文档）。"""
+
+    def __init__(
+        self,
+        runner: TaskRunner,
+        resolve_path: Callable[[str], Path],
+    ) -> None:
+        self._runner = runner
+        self._resolve_path = resolve_path
+
+    def handle(self, request: ParseRequest) -> None:
+        start, end = request.page_range
+        self._runner.process_pages(
+            self._resolve_path(request.doc_id),
+            list(range(start, end + 1)),
+            task_id=request.task_id,
+        )
 
 
 class Worker:

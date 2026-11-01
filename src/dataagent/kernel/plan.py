@@ -131,6 +131,20 @@ class PlanScope(BaseModel):
             raise ValueError("pages 范围起始页不能大于结束页")
         return value.strip()
 
+    def resolve_bounds(self, total_pages: int) -> tuple[int, int]:
+        """在给定总页数下解析为 1-indexed 闭区间。"""
+        match = _SCOPE_PATTERN.match(self.pages)
+        if match is None:  # 校验已保证可解析
+            raise PlanValidationError(f"pages 范围不合法：{self.pages!r}")
+        start = int(match.group("start"))
+        end_text = match.group("end")
+        end = int(end_text) if end_text else total_pages
+        return start, min(end, total_pages)
+
+    def contains(self, page: int, total_pages: int) -> bool:
+        start, end = self.resolve_bounds(total_pages)
+        return start <= page <= end
+
 
 class PlanDecisionOn(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

@@ -163,3 +163,37 @@ def test_worker_package_has_no_asyncio_run() -> None:
         path.read_text(encoding="utf-8") for path in package_dir.glob("*.py")
     )
     assert "asyncio.run" not in source
+
+
+class StubRunner:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Path, list[int], str]] = []
+
+    def process_pages(
+        self, path: Path, pages: list[int], *, task_id: str = "task"
+    ) -> None:
+        self.calls.append((path, pages, task_id))
+
+
+def test_task_runner_batch_handler_expands_page_range() -> None:
+    from dataagent.apps.worker.worker import TaskRunnerBatchHandler
+
+    runner = StubRunner()
+    handler = TaskRunnerBatchHandler(
+        runner, lambda doc_id: Path(f"/corpus/{doc_id}.pdf")
+    )
+
+    handler.handle(
+        ParseRequest(
+            task_id="task-9",
+            doc_id="doc-7",
+            page_range=(33, 35),
+            engine="engine.pdf@1.0.0",
+            params_hash="params",
+            rulepack_hash="rulepack",
+            resource_hint="cpu",
+            doc_affinity_key="doc-7",
+        )
+    )
+
+    assert runner.calls == [(Path("/corpus/doc-7.pdf"), [33, 34, 35], "task-9")]
