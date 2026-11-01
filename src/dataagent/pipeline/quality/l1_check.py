@@ -74,6 +74,17 @@ class L1Metrics:
     page_number_ok: bool | None = None
 
 
+    @classmethod
+    def from_text(cls, text: str, *, text_area: float) -> L1Metrics:
+        """从恢复文本构造可用的 L1 指标（字符密度 / 字形覆盖）。"""
+        chars = [char for char in text if not char.isspace()]
+        count = len(chars)
+        bad = text.count("�")
+        density = count / text_area if text_area > 0 else 0.0
+        coverage = 1 - bad / count if count else 0.0
+        return cls(char_density=density, glyph_coverage=coverage)
+
+
 @dataclass(frozen=True, slots=True)
 class L1PageInput:
     """单页质检输入：只有指标与页型，不含文件 / 产物（QC 只读）。"""

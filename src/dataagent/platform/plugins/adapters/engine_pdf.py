@@ -4,6 +4,8 @@
 - `pdf.classify` 只调 `detect_pdf`（不产内容：markdown 恒 None、cmap_gaps 恒为空）。
 - `pdf.text.extract` 调 `extract_pages_markdown`，一次传入多页、保持调用方顺序；
   产出不可变 artifact。
+- 隐藏文本层：`needs_ocr` 页若 PDFium 探测到可用文本层，恢复文本并标记
+  `warnings=text_layer_recovered`，不送 OCR；不可用才保留 `needs_ocr`。
 - 页码字段级转换只经 `contracts/pages.py`：内部 1-indexed ⇄ 插件 0-indexed。
 """
 
@@ -26,6 +28,10 @@ from dataagent.contracts.artifacts import (
 from dataagent.contracts.ids import content_hash
 from dataagent.contracts.plugin import PluginContext, PluginManifest
 from dataagent.contracts.policies import PdfType
+from dataagent.platform.plugins.adapters.text_layer import (
+    TextLayerReport,
+    probe_text_layer,
+)
 
 CLASSIFY = "pdf.classify"
 EXTRACT = "pdf.text.extract"
@@ -144,17 +150,17 @@ class EnginePdfPlugin:
         page_numbers = pages.internal_page_numbers(
             [int(page.page) for page in result.pages]
         )
+        pairs = list(zip(page_numbers, result.pages, strict=True))
+        probe_report = _probe_ocr_pages(payload, pairs)
         artifacts = tuple(
-            PageArtifact(
-                doc_id=context.doc_id,
+            self._artifact(
                 page_no=page_no,
-                engine=MANIFEST.ref,
+                page=page,
+                context=context,
                 params_hash=params_hash,
-                markdown=page.markdown,
-                needs_ocr=bool(page.needs_ocr),
-                ocr_reason=page.ocr_reason,
+                probe=probe_report,
             )
-            for page_no, page in zip(page_numbers, result.pages, strict=True)
+            for page_no, page in pairs
         )
         extraction = ExtractionResult(
             doc_id=context.doc_id,
@@ -172,6 +178,48 @@ class EnginePdfPlugin:
         )
         return extraction.model_dump(mode="json")
 
+    def _artifact(
+        self,
+        *,
+        page_no: int,
+        page: Any,
+        context: PluginContext,
+        params_hash: str,
+        probe: TextLayerReport | None,
+    ) -> PageArtifact:
+        markdown = page.markdown
+        needs_ocr = bool(page.needs_ocr)
+        ocr_reason = page.ocr_reason
+        warnings: tuple[str, ...] = ()
+        text_layer: str | None = None
+        if needs_ocr:
+            recovered = probe.page(page_no) if probe is not None else None
+            if recovered is not None and recovered.usable:
+                markdown = _recovered_markdown(recovered.text)
+                needs_ocr = False
+                ocr_reason = None
+                warnings = ("text_layer_recovered",)
+                text_layer = "invisible_recovered"
+            else:
+                reason = (
+                    recovered.quality.reason
+                    if recovered is not None
+                    else "probe_failed"
+                )
+                warnings = (f"text_layer_unusable:{reason}",)
+                text_layer = "absent"
+        return PageArtifact(
+            doc_id=context.doc_id,
+            page_no=page_no,
+            engine=MANIFEST.ref,
+            params_hash=params_hash,
+            markdown=markdown,
+            needs_ocr=needs_ocr,
+            ocr_reason=ocr_reason,
+            warnings=warnings,
+            text_layer=text_layer,
+        )
+
 
 def _call_source(
     path_call: Any, bytes_call: Any, payload: Mapping[str, Any], **kwargs: Any
@@ -184,6 +232,33 @@ def _call_source(
     if path is None:
         raise ValueError("pdf 插件载荷必须提供 path 或 data")
     return path_call(str(path), **kwargs)
+
+
+def _probe_ocr_pages(
+    payload: Mapping[str, Any], pairs: list[tuple[int, Any]]
+) -> TextLayerReport | None:
+    ocr_pages = [page_no for page_no, page in pairs if page.needs_ocr]
+    if not ocr_pages:
+        return None
+    try:
+        return probe_text_layer(_probe_source(payload), pages=ocr_pages)
+    except Exception:
+        return None
+
+
+def _probe_source(payload: Mapping[str, Any]) -> str | bytes:
+    data = payload.get("data")
+    if data is not None:
+        return bytes(data)
+    path = payload.get("path")
+    if path is None:
+        raise ValueError("pdf 插件载荷必须提供 path 或 data")
+    return str(path)
+
+
+def _recovered_markdown(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    return normalized + "\n" if normalized else ""
 
 
 def _params_hash(payload: Mapping[str, Any]) -> str:

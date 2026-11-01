@@ -262,17 +262,17 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T130 [R1] 文本层探测与质量门测试 `tests/unit/platform/plugins/adapters/test_text_layer.py` — 三类样本：隐藏 OCR 文本层（本语料 574 页书）、纯扫描无文本层、正常文本 PDF；质量门（字符数 ≥ 50、`U+FFFD` 占比 ≤ 1%、可打印率 ≥ 95%）；逐页判定与文档级汇总；不可用时明确返回 absent
-- [ ] T131 [R1] engine.pdf 恢复测试 `tests/unit/platform/plugins/adapters/test_engine_pdf_recovery.py` — `invisible_text_layer` 页探测成功后产出文本 artifact、`warnings` 标记 `text_layer_recovered`、不再标记需 OCR；探测失败仍保留 `needs_ocr`
-- [ ] T132 [R2] 画像/路由/档位接入测试 — 抽取后 layout 回填（表格/分栏/旋转/复杂度）；文本层恢复页 route=native 且理由含 `text_layer_recovered`；`RuleTierPolicy` 不再对恢复页强制 T3；L1 输入来自恢复文本
+- [X] T130 [R1] 文本层探测与质量门测试 `tests/unit/platform/plugins/adapters/test_text_layer.py` — 三类样本：隐藏 OCR 文本层（本语料 574 页书）、纯扫描无文本层、正常文本 PDF；质量门（字符数 ≥ 50、`U+FFFD` 占比 ≤ 1%、可打印率 ≥ 95%）；逐页判定与文档级汇总；不可用时明确返回 absent
+- [X] T131 [R1] engine.pdf 恢复测试 `tests/unit/platform/plugins/adapters/test_engine_pdf_recovery.py` — `invisible_text_layer` 页探测成功后产出文本 artifact、`warnings` 标记 `text_layer_recovered`、不再标记需 OCR；探测失败仍保留 `needs_ocr`
+- [X] T132 [R2] 画像/路由/档位接入测试 — 抽取后 layout 回填（表格/分栏/旋转/复杂度）；文本层恢复页 route=native 且理由含 `text_layer_recovered`；`RuleTierPolicy` 不再对恢复页强制 T3；L1 输入来自恢复文本
 - [ ] T133 [R3] `process_pdf` 标题标定测试 — 仅在乱码页/标题异常时触发；标题行按规范化文本 + 页顺序回填；`process_pdf` 1-indexed 与 extract 0-indexed 语义隔离；标定失败标记 `heading_calibration_failed` 且不阻塞
 - [ ] T134 [R4] 黄金集口径更新测试 — manifest 增加 `text_layer` / `text_chars` / `bad_ratio`，扫描类拆分 `invisible_text_layer` 与 `pure_scan`；恢复率与恢复页 CER 进入自动评测
 
 ### 实现
 
-- [ ] T135 [R1] `uv add pypdfium2`（runtime）并实现 `src/dataagent/platform/plugins/adapters/text_layer.py` — PDFium 逐页读取隐藏文本层 + 质量门 + provenance
-- [ ] T136 [R1] 接入 `engine_pdf.py` — `invisible_text_layer` 页恢复文本并写入 `PageArtifact.warnings` / `text_layer`；纯扫描页不恢复
-- [ ] T137 [R2] 实现画像质量段 layout 回填 + 路由 override + 档位例外 + L1 输入 — `pipeline/profile/writer.py`、`pipeline/route/routes.py`、`kernel/policies/rule_tier.py`、`pipeline/quality/l1_check.py`
+- [X] T135 [R1] `uv add pypdfium2`（runtime）并实现 `src/dataagent/platform/plugins/adapters/text_layer.py` — PDFium 逐页读取隐藏文本层 + 质量门 + provenance
+- [X] T136 [R1] 接入 `engine_pdf.py` — `invisible_text_layer` 页恢复文本并写入 `PageArtifact.warnings` / `text_layer`；纯扫描页不恢复
+- [X] T137 [R2] 实现画像质量段 layout 回填 + 路由 override + 档位例外 + L1 输入 — `pipeline/profile/writer.py`、`pipeline/route/routes.py`、`kernel/policies/rule_tier.py`、`pipeline/quality/l1_check.py`
 - [ ] T138 [R3] 实现 `src/dataagent/platform/plugins/adapters/heading_calibration.py` — 按需 `process_pdf` 标题标定 + 失败兜底；接入 `engine_pdf.py`
 - [ ] T139 [R4] 更新黄金集/查看器/评测与文档 — `tests/eval/*`、`docs/ADR/0005-hidden-text-layer.md`、`docs/CHANGELOG.md`、README；全量回归（CI 四件套 + import-linter + grep 门禁）并 commit + push
 

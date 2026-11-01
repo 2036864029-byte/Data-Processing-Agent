@@ -12,12 +12,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum, unique
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Final, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from dataagent.contracts.defects import Defect, OperatorResult, RepairOperator
 from dataagent.contracts.errors import DefectCode
+
+# 文本层恢复标记：PageProfile.class.route_reason 携带，档位策略据此豁免 T3
+TEXT_LAYER_RECOVERED_REASON: Final[str] = "text_layer_recovered"
 
 # 算子封闭集来自 defects（与 pipeline/repair/mapping.py 同源，均派生自 DEFECT_SPECS）
 OperatorId = RepairOperator

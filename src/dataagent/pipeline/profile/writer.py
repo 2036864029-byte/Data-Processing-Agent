@@ -12,9 +12,12 @@ from __future__ import annotations
 from typing import Protocol
 
 from dataagent.contracts.policies import (
+    TEXT_LAYER_RECOVERED_REASON,
     PageProfile,
+    ProfileLayout,
     ProfileQuality,
     ProfileSignals,
+    RouteSuggestion,
 )
 from dataagent.pipeline.route.routes import RouteDecision, RouteLevel
 
@@ -70,12 +73,49 @@ class PageProfileWriter:
         signals: ProfileSignals,
         quality: ProfileQuality,
     ) -> PageProfile:
-        existing = self._store.load(doc_id, page_no)
-        if existing is None:
-            raise ProfileStageOrderError(
-                f"页 {doc_id}:{page_no} 的路由段尚未写入，禁止先写质量段"
-            )
+        existing = self._require(doc_id, page_no)
         profile = existing.model_copy(update={"signals": signals, "quality": quality})
+        self._store.save(profile)
+        return profile
+
+    def write_extraction_layout(
+        self,
+        doc_id: str,
+        page_no: int,
+        *,
+        has_table: bool,
+        columns: int,
+        is_complex: bool,
+        rotation: int = 0,
+    ) -> PageProfile:
+        """抽取后回填 layout（`detect_pdf` 不提供表格/分栏/复杂度）。"""
+        existing = self._require(doc_id, page_no)
+        layout = ProfileLayout(
+            columns=max(1, int(columns)),
+            has_table=has_table,
+            is_complex=is_complex,
+            rotation=int(rotation),
+        )
+        profile = existing.model_copy(update={"layout": layout})
+        self._store.save(profile)
+        return profile
+
+    def apply_text_layer_recovery(
+        self,
+        doc_id: str,
+        page_no: int,
+        *,
+        reason: str = TEXT_LAYER_RECOVERED_REASON,
+    ) -> PageProfile:
+        """隐藏文本层恢复：route 改 native，理由追加到 route_reason（幂等）。"""
+        existing = self._require(doc_id, page_no)
+        reasons = list(existing.class_.route_reason)
+        if reason not in reasons:
+            reasons.append(reason)
+        class_ = existing.class_.model_copy(
+            update={"route": RouteSuggestion.NATIVE, "route_reason": reasons}
+        )
+        profile = existing.model_copy(update={"class_": class_})
         self._store.save(profile)
         return profile
 
@@ -83,4 +123,12 @@ class PageProfileWriter:
         profile = self._store.load(doc_id, page_no)
         if profile is None:
             raise KeyError(f"页面画像不存在：{doc_id}:{page_no}")
+        return profile
+
+    def _require(self, doc_id: str, page_no: int) -> PageProfile:
+        profile = self._store.load(doc_id, page_no)
+        if profile is None:
+            raise ProfileStageOrderError(
+                f"页 {doc_id}:{page_no} 的路由段尚未写入"
+            )
         return profile

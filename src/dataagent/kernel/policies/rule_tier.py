@@ -6,7 +6,13 @@
 
 from __future__ import annotations
 
-from dataagent.contracts.policies import PageProfile, PdfType, RouteSuggestion, Tier
+from dataagent.contracts.policies import (
+    TEXT_LAYER_RECOVERED_REASON,
+    PageProfile,
+    PdfType,
+    RouteSuggestion,
+    Tier,
+)
 
 TAU0: float = 0.85
 CLASS_CONFIDENCE_MIN: float = 0.85
@@ -31,8 +37,10 @@ class RuleTierPolicy:
         self._header_footer_ratio_max = header_footer_ratio_max
 
     def tier(self, profile: PageProfile, quality: float) -> Tier:
+        recovered = TEXT_LAYER_RECOVERED_REASON in profile.class_.route_reason
         # T3：插件能力边界外（非 native 链路 / 扫描件 / 分类判不准 / 编码全损）
-        if (
+        # 隐藏文本层恢复页除外：文本可用时按质量与版式正常判档
+        if not recovered and (
             profile.route is not RouteSuggestion.NATIVE
             or profile.pdf_type in {PdfType.SCANNED, PdfType.IMAGE_BASED}
             or profile.class_confidence < self._class_confidence_min

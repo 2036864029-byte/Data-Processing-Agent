@@ -16,6 +16,7 @@ dependencies = [
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.2",
     "pydantic-settings>=2.16.2",
+    "pypdfium2>=5.14.0",
     "pyyaml>=6.0.3",
     "redis>=8.1.0",
     "sqlalchemy>=2.1.6",
@@ -37,7 +38,6 @@ dev = [
     "minio>=7.2.20",
     "mypy>=2.4.1",
     "pillow>=13.0.0",
-    "pypdfium2>=5.14.0",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "redis>=8.1.0",
@@ -84,6 +84,11 @@ strict = true
 # boto3 未发布完整类型存根（mypy strict 下必报 missing stubs）；仅在 s3.py 内使用，G9 门禁限定
 [[tool.mypy.overrides]]
 module = ["boto3", "botocore", "botocore.*"]
+ignore_missing_imports = true
+
+# pypdfium2 未提供 py.typed（PDFium 文本层探测用）；仅在 adapters 内使用
+[[tool.mypy.overrides]]
+module = ["pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true
 
 # coverage：单元行覆盖——其余 ≥ 80%；核心模块（kernel / platform.store / pipeline.repair）≥ 90%

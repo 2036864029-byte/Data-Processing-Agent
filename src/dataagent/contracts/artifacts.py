@@ -78,6 +78,11 @@ class PageArtifact(BaseModel):
     markdown: str
     needs_ocr: bool = False
     ocr_reason: str | None = None
+    warnings: tuple[str, ...] = ()
+    text_layer: str | None = Field(
+        default=None,
+        description="文本层来源：present / invisible_recovered / absent；None = 未探测",
+    )
 
 
 class ExtractionResult(BaseModel):
