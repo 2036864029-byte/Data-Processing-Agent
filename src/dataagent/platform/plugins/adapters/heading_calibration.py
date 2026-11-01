@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,8 +22,14 @@ import pdf_inspector
 from dataagent.contracts.artifacts import PageArtifact
 
 MIN_TEXT_PAGES_FOR_HEADING_CHECK: Final[int] = 30
+MAX_HEADING_CHARS: Final[int] = 80
+MAX_HEADING_LINE_EXTRA: Final[int] = 20
 CALIBRATED_WARNING: Final[str] = "heading_calibrated"
 FAILED_WARNING: Final[str] = "heading_calibration_failed"
+
+_HEADING_MARKER_RE: Final[re.Pattern[str]] = re.compile(
+    r"第[一二三四五六七八九十百零〇\d]+[章节]|[一二三四五六七八九十]+、"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +130,8 @@ def _assign(
     used: set[tuple[int, int]] = set()
     assignments: list[tuple[int, int, int, str]] = []
     for level, text in headings:
+        if not _looks_like_heading(text):
+            continue
         target = _normalize(text)
         found: tuple[int, int] | None = None
         for page_index in range(cursor, len(artifacts)):
@@ -144,12 +153,22 @@ def _assign(
 
 def _inject(markdown: str, items: Sequence[tuple[int, int, str]]) -> str:
     lines = markdown.splitlines()
-    for line_index, level, _text in items:
+    for line_index, level, text in items:
         stripped = lines[line_index].strip()
         if not stripped or stripped.startswith("#"):
             continue
+        if len(stripped) > len(text) + MAX_HEADING_LINE_EXTRA:
+            continue
         lines[line_index] = "#" * level + " " + stripped
     return "\n".join(lines) + ("\n" if markdown.endswith("\n") else "")
+
+
+def _looks_like_heading(text: str) -> bool:
+    if len(text) > MAX_HEADING_CHARS:
+        return False
+    if text.rstrip().endswith(("。", "；", "，")):
+        return False
+    return len(_HEADING_MARKER_RE.findall(text)) < 2
 
 
 def _normalize(text: str) -> str:
