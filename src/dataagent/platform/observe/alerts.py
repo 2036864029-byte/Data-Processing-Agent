@@ -24,6 +24,7 @@ class AlertKind(StrEnum):
     NODE_OFFLINE = "node_offline"
     FAILURE_DISTRIBUTION_DRIFT = "failure_distribution_drift"
     PLUGIN_REASON_UNKNOWN_RATIO = "plugin_reason_unknown_ratio"
+    UNCLASSIFIED_FORMAT = "unclassified_format"
 
 
 @unique
@@ -177,6 +178,18 @@ class AlertEvaluator:
                     "（疑似插件升级或映射表过期）",
                     unknown_ratio,
                     thresholds.plugin_reason_unknown_ratio_max,
+                )
+            )
+
+        unclassified = _number(stats, "unclassified_format_count")
+        if unclassified is not None and unclassified > 0:
+            alerts.append(
+                _alert(
+                    AlertKind.UNCLASSIFIED_FORMAT,
+                    AlertSeverity.WARNING,
+                    f"{int(unclassified)} 个文件无法分类，已进待确认队列（不得静默丢弃）",
+                    int(unclassified),
+                    0,
                 )
             )
 

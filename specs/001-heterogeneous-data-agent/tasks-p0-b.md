@@ -58,14 +58,14 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T078 [B2] 家族判定测试 `tests/unit/pipeline/sniff/test_sniffer.py` — 输出 `pdf / tabular / text / image / unknown` 五类家族；判定三态（确信 / 歧义 / 无法分类）；magic / 编码 / 分隔符各自覆盖正常与损坏样本
-- [ ] T079 [B2] 后缀不符与无法分类测试 — CSV 改名 `.pdf` 按内容而非后缀判定、记录 `extension_mismatch` 事件（不误判、不猜）；无法分类进待确认队列并告警
-- [ ] T080 [B2] 性能断言测试 — 单文件判定开销 ≤ 50ms 且最多读取前 256KB（FR-003）
+- [X] T078 [B2] 家族判定测试 `tests/unit/pipeline/sniff/test_sniffer.py` — 输出 `pdf / tabular / text / image / unknown` 五类家族；判定三态（确信 / 歧义 / 无法分类）；magic / 编码 / 分隔符各自覆盖正常与损坏样本
+- [X] T079 [B2] 后缀不符与无法分类测试 — CSV 改名 `.pdf` 按内容而非后缀判定、记录 `extension_mismatch` 事件（不误判、不猜）；无法分类进待确认队列并告警
+- [X] T080 [B2] 性能断言测试 — 单文件判定开销 ≤ 50ms 且最多读取前 256KB（FR-003）
 
 ### 实现 B2
 
-- [ ] T081 [B2] 实现 `src/dataagent/pipeline/sniff/sniffer.py` — 一级格式判定器（magic 探测 + 编码检测 + 分隔符统计），纯规则、不依赖任何解析插件，≤50ms / ≤256KB
-- [ ] T082 [B2] 实现歧义双跑决策 — 歧义时**不得直接猜**，小样本双跑比较质量与成本后再决策；无法分类归待确认队列并告警
+- [X] T081 [B2] 实现 `src/dataagent/pipeline/sniff/sniffer.py` — 一级格式判定器（magic 探测 + 编码检测 + 分隔符统计），纯规则、不依赖任何解析插件，≤50ms / ≤256KB
+- [X] T082 [B2] 实现歧义双跑决策 — 歧义时**不得直接猜**，小样本双跑比较质量与成本后再决策；无法分类归待确认队列并告警
 
 **Checkpoint**: 判定 / 三态 / 性能断言全绿 → commit + push
 

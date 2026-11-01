@@ -51,6 +51,7 @@ def test_alert_kinds_cover_required_triggers() -> None:
         "node_offline",
         "failure_distribution_drift",
         "plugin_reason_unknown_ratio",
+        "unclassified_format",
     }
 
 
@@ -69,6 +70,7 @@ def test_healthy_stats_produce_no_alerts() -> None:
         ({"node_heartbeat_age_s": 120.0}, AlertKind.NODE_OFFLINE),
         ({"failure_distribution_drift": 0.40}, AlertKind.FAILURE_DISTRIBUTION_DRIFT),
         ({"plugin_reason_unknown_ratio": 0.06}, AlertKind.PLUGIN_REASON_UNKNOWN_RATIO),
+        ({"unclassified_format_count": 1}, AlertKind.UNCLASSIFIED_FORMAT),
     ],
 )
 def test_each_alert_trigger(stats: dict[str, float], kind: AlertKind) -> None:
