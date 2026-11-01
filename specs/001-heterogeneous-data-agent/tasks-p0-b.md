@@ -102,12 +102,12 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T090 [B4] 两段写入测试 `tests/unit/pipeline/profile/test_write.py` — 路由段（`pdf_type` / `class_confidence` / `route` / `route_reason[]` / `columns` / `has_table` / `is_complex` / `rotation`）先写；解析完成后写 `signals`（`char_density` / `glyph_coverage` / `empty_region_ratio` / `header_footer_ratio`）与 `quality`（`extract_quality` / `tier`）；`glyph_coverage` 来自 `cmap_gaps` 仅抽取后可得
-- [ ] T091 [B4] route_reason 原样保留测试 — 上游返回的路由原因原样落库，不裁剪 / 不映射 / 不丢弃（G2）；映射成缺陷码发生在配置表而非落库时；禁 `page_filter` 引用 `extract_quality`（因果循环）
+- [X] T090 [B4] 两段写入测试 `tests/unit/pipeline/profile/test_write.py` — 路由段（`pdf_type` / `class_confidence` / `route` / `route_reason[]` / `columns` / `has_table` / `is_complex` / `rotation`）先写；解析完成后写 `signals`（`char_density` / `glyph_coverage` / `empty_region_ratio` / `header_footer_ratio`）与 `quality`（`extract_quality` / `tier`）；`glyph_coverage` 来自 `cmap_gaps` 仅抽取后可得
+- [X] T091 [B4] route_reason 原样保留测试 — 上游返回的路由原因原样落库，不裁剪 / 不映射 / 不丢弃（G2）；映射成缺陷码发生在配置表而非落库时；禁 `page_filter` 引用 `extract_quality`（因果循环）
 
 ### 实现 B4
 
-- [ ] T092 [B4] 实现 `src/dataagent/pipeline/profile/` — 两段写入器（路由段 + 质量段），`route_reason` 原样保留
+- [X] T092 [B4] 实现 `src/dataagent/pipeline/profile/` — 两段写入器（路由段 + 质量段），`route_reason` 原样保留
 
 **Checkpoint**: 两段写入测试全绿 → commit + push
 
