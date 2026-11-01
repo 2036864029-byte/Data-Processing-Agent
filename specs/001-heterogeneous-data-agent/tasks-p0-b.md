@@ -121,14 +121,14 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T093 [B5] L1 全量硬门控测试 `tests/unit/pipeline/quality/test_l1.py` — 逐页确定性指标全量、硬门控、定位到页（FR-009）；任何性能档位下全量执行
-- [ ] T094 [B5] L2 分层抽样测试 — 昂贵校验分层抽样 + 低质量页全查；`profile_speed` 三档（quality / balanced / fast）只削 L2 抽样比例与增强轮次（FR-009）
-- [ ] T095 [B5] QC 只读测试 — 质检器不重新解析、不修改产物；质检结果**先落库再触发下游**（G5 / role-messages 三条硬性约束 #2）；缺陷必带可操作 `location`、无 location 不进修复队列只能统计
+- [X] T093 [B5] L1 全量硬门控测试 `tests/unit/pipeline/quality/test_l1.py` — 逐页确定性指标全量、硬门控、定位到页（FR-009）；任何性能档位下全量执行
+- [X] T094 [B5] L2 分层抽样测试 — 昂贵校验分层抽样 + 低质量页全查；`profile_speed` 三档（quality / balanced / fast）只削 L2 抽样比例与增强轮次（FR-009）
+- [X] T095 [B5] QC 只读测试 — 质检器不重新解析、不修改产物；质检结果**先落库再触发下游**（G5 / role-messages 三条硬性约束 #2）；缺陷必带可操作 `location`、无 location 不进修复队列只能统计
 
 ### 实现 B5
 
-- [ ] T096 [B5] 实现 `src/dataagent/pipeline/quality/l1_check.py` — 逐页确定性指标 + 硬门控（全量、定位到页）
-- [ ] T097 [B5] 实现 `src/dataagent/pipeline/quality/l2_sample.py` — L2 分层抽样 + 性能档位 `profile_speed`（抽样比例按档位配置）
+- [X] T096 [B5] 实现 `src/dataagent/pipeline/quality/l1_check.py` — 逐页确定性指标 + 硬门控（全量、定位到页）
+- [X] T097 [B5] 实现 `src/dataagent/pipeline/quality/l2_sample.py` — L2 分层抽样 + 性能档位 `profile_speed`（抽样比例按档位配置）
 
 **Checkpoint**: L1 / L2 / 只读测试全绿 → commit + push
 
