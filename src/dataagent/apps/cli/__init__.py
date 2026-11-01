@@ -15,6 +15,7 @@ from pathlib import Path
 from dataagent.apps.cli.commands import (
     DEFAULT_MIN_FREE_MB,
     bench_lines,
+    bench_passed,
     check_port,
     follow_logs,
     list_plugins,
@@ -60,7 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--port", type=int, default=None)
     doctor.add_argument("--host", default="127.0.0.1")
 
-    sub.add_parser("bench", help="性能基准（p50 / p95 / 吞吐 / 内存峰值）")
+    bench = sub.add_parser("bench", help="性能基准（p50 / p95 / 吞吐 / 内存峰值）")
+    bench.add_argument("--sample", type=Path, default=None, help="基准 PDF 样本")
+    bench.add_argument("--repeats", type=int, default=5, help="单页采样次数")
+    bench.add_argument("--batch-pages", type=int, default=None, help="覆盖批大小")
     return parser
 
 
@@ -71,8 +75,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_lines(status_lines())
         return 0
     if args.command == "bench":
-        _print_lines(bench_lines())
-        return 0
+        lines = bench_lines(
+            args.sample,
+            repeats=args.repeats,
+            batch_pages=args.batch_pages,
+        )
+        _print_lines(lines)
+        return 0 if args.sample is None or bench_passed(lines) else 1
     if args.command == "logs":
         return _run_logs(args)
     if args.command == "plugin":

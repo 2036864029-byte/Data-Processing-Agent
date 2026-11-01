@@ -13,7 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dataagent.apps.api.status import EmptyStatusProvider, StatusProvider
+from dataagent.pipeline.bench import detect_machine, run_bench
 from dataagent.platform.plugins.loader import PluginLoadError, discover_manifests
+from dataagent.platform.runtime.resources import (
+    recommended_batch_pages,
+    recommended_workers,
+)
 
 DEFAULT_MIN_FREE_MB = 512
 DEFAULT_MODEL_FILES: tuple[str, ...] = ("ocr/models/ch_PP-OCRv4_det.onnx",)
@@ -139,14 +144,31 @@ def status_lines(provider: StatusProvider | None = None) -> list[str]:
     return lines
 
 
-def bench_lines() -> list[str]:
-    return [
-        "bench 骨架（P0-A，尚未接入解析器）",
-        "单页 p50: n/a",
-        "单页 p95: n/a",
-        "批量吞吐: n/a",
-        "内存峰值: n/a",
-    ]
+def bench_lines(
+    sample: Path | None = None,
+    *,
+    repeats: int = 5,
+    batch_pages: int | None = None,
+) -> list[str]:
+    """性能基准：无样本时打印用法与公式值；有样本时跑真实端到端基准。"""
+    if sample is None:
+        profile = detect_machine()
+        return [
+            "bench 需要样本：dataagent bench --sample <pdf>",
+            (
+                f"建议批大小 / worker: "
+                f"{recommended_batch_pages(profile)} / {recommended_workers(profile)}"
+            ),
+            "单页 p50: n/a",
+            "单页 p95: n/a",
+            "批量吞吐: n/a",
+            "内存峰值: n/a",
+        ]
+    return run_bench(sample, repeats=repeats, batch_pages=batch_pages).lines()
+
+
+def bench_passed(lines: Sequence[str]) -> bool:
+    return not any("[FAIL]" in line for line in lines)
 
 
 def read_appended_lines(path: Path, offset: int) -> tuple[list[str], int]:
