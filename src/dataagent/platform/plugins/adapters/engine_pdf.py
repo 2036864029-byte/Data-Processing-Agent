@@ -6,6 +6,8 @@
   产出不可变 artifact。
 - 隐藏文本层：`needs_ocr` 页若 PDFium 探测到可用文本层，恢复文本并标记
   `warnings=text_layer_recovered`，不送 OCR；不可用才保留 `needs_ocr`。
+- 标题标定：乱码页或长文档无标题时按需一次 `process_pdf`，标题回填逐页产物；
+  失败标记 `heading_calibration_failed`，不阻塞。
 - 页码字段级转换只经 `contracts/pages.py`：内部 1-indexed ⇄ 插件 0-indexed。
 """
 
@@ -28,6 +30,10 @@ from dataagent.contracts.artifacts import (
 from dataagent.contracts.ids import content_hash
 from dataagent.contracts.plugin import PluginContext, PluginManifest
 from dataagent.contracts.policies import PdfType
+from dataagent.platform.plugins.adapters.heading_calibration import (
+    calibrate_headings,
+    needs_calibration,
+)
 from dataagent.platform.plugins.adapters.text_layer import (
     TextLayerReport,
     probe_text_layer,
@@ -162,6 +168,7 @@ class EnginePdfPlugin:
             )
             for page_no, page in pairs
         )
+        artifacts = self._calibrate_headings(payload, result, artifacts)
         extraction = ExtractionResult(
             doc_id=context.doc_id,
             engine=MANIFEST.ref,
@@ -177,6 +184,32 @@ class EnginePdfPlugin:
             is_complex=bool(result.is_complex),
         )
         return extraction.model_dump(mode="json")
+
+    def _calibrate_headings(
+        self,
+        payload: Mapping[str, Any],
+        result: Any,
+        artifacts: tuple[PageArtifact, ...],
+    ) -> tuple[PageArtifact, ...]:
+        reasons = [page.ocr_reason for page in result.pages]
+        markdowns = [artifact.markdown for artifact in artifacts]
+        if not needs_calibration(reasons, markdowns):
+            return artifacts
+        calibrated, outcome = calibrate_headings(
+            _probe_source(payload), artifacts
+        )
+        if outcome.applied:
+            return calibrated
+        if outcome.warnings:
+            return tuple(
+                artifact.model_copy(
+                    update={
+                        "warnings": (*artifact.warnings, *outcome.warnings)
+                    }
+                )
+                for artifact in calibrated
+            )
+        return calibrated
 
     def _artifact(
         self,
