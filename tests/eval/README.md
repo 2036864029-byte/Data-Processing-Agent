@@ -34,8 +34,8 @@
 - `label_source`：人工填 `human`；自动扩展标签填 `auto`，并在报告中只用人面子集验收；
 - 参照物是原始 PDF 页面与系统产物并排对照，不是另一次解析结果。
 - 查看器内置「评分标准」折叠面板与每张卡片的判据提示（结构=层级/段落/列表/表格行列/顺序；版式=块位置/分栏/bbox）。
-- 空产物页会带状态：`needs_ocr`（无文本层，需 OCR，空属预期）或
-  `suspected_garbled`（引擎判疑似乱码未出 Markdown，查看器回退展示原生文本项）。
+- 空产物页会带状态：`text_layer_recovered`（PDFium 恢复隐藏/乱码文本层，展示恢复文本）、
+  `needs_ocr`（纯扫描无文本层，需 OCR）或 `suspected_garbled`（旧口径回退）。
 
 ## 输出
 
@@ -44,6 +44,7 @@
 | `manifest.json` / `manifest.csv` | 200 页抽样清单（含类别/来源/页码） |
 | `manifest_summary.json` | 六类可用量、选中量、构造补齐量、缺口 |
 | `manifest.csv` 的 `table_rows/cols/cells` | 表格尺寸（短表/伪表格不进入表格类；构造样本含 36×6 与 61×6 长表） |
+| `manifest.csv` 的 `text_layer/text_chars/bad_ratio` | 文本层口径：present / invisible_text_layer / garbled_text_layer / pure_scan / absent；汇总见 manifest_summary |
 | `annotations.csv` | 全量标注模板（已存在则不覆盖） |
 | `human_sheet.csv` | 60 页人工打分子集 |
 | `metrics.csv` | 每页代理指标（标定输入） |
@@ -51,5 +52,5 @@
 | `parsed/<sample_id>.md` | 每页产物（查看器右侧内容） |
 | `annotations_filled.csv` | 查看器导出的打分（导入后写回 annotations.csv） |
 | `calibration_report.json` | 权重、阈值、留出集 Spearman / 一致率 |
-| `eval_report.json` | 构造样本自动评测与门禁 |
+| `eval_report.json` | 构造样本自动评测与门禁；含文本层恢复率与恢复路径 CER |
 | `viewer.html` | 样本清单查看页 |

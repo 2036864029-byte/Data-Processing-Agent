@@ -34,6 +34,52 @@ GOLDEN_ROOT: Final[Path] = Path("var/golden")
 DEFAULT_SEED: Final[int] = 20261101
 HUMAN_PAGES_PER_CATEGORY: Final[int] = 10
 
+TEXT_LAYER_PRESENT: Final[str] = "present"
+TEXT_LAYER_INVISIBLE: Final[str] = "invisible_text_layer"
+TEXT_LAYER_GARBLED: Final[str] = "garbled_text_layer"
+TEXT_LAYER_PURE_SCAN: Final[str] = "pure_scan"
+TEXT_LAYER_ABSENT: Final[str] = "absent"
+
+
+def classify_text_layer(
+    *,
+    needs_ocr: bool,
+    has_text: bool,
+    probe_usable: bool,
+    reason: str | None = None,
+) -> str:
+    if not needs_ocr:
+        return TEXT_LAYER_PRESENT if has_text else TEXT_LAYER_ABSENT
+    if probe_usable:
+        return (
+            TEXT_LAYER_GARBLED
+            if reason == "suspected_garbled_text"
+            else TEXT_LAYER_INVISIBLE
+        )
+    return TEXT_LAYER_PURE_SCAN
+
+
+def text_layer_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    counts = {
+        TEXT_LAYER_PRESENT: 0,
+        TEXT_LAYER_INVISIBLE: 0,
+        TEXT_LAYER_GARBLED: 0,
+        TEXT_LAYER_PURE_SCAN: 0,
+        TEXT_LAYER_ABSENT: 0,
+    }
+    for row in rows:
+        kind = str(row.get("text_layer") or "")
+        if kind in counts:
+            counts[kind] += 1
+    recovered = counts[TEXT_LAYER_INVISIBLE] + counts[TEXT_LAYER_GARBLED]
+    candidates = recovered + counts[TEXT_LAYER_PURE_SCAN]
+    rate = recovered / candidates if candidates else None
+    return {
+        "counts": counts,
+        "ocr_candidates": candidates,
+        "recovery_rate": rate,
+    }
+
 
 @dataclass(frozen=True, slots=True)
 class PageSignals:

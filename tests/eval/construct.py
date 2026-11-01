@@ -267,6 +267,16 @@ def generate(root: Path = GOLDEN_ROOT) -> list[dict[str, Any]]:
                     "table_cols": str(_truth_table_cols(truth)),
                     "table_cells": str(_truth_table_cells(truth)),
                     "ocr_reason": "",
+                    "text_layer": "present",
+                    "text_chars": len(
+                        "".join(
+                            line
+                            for page in truth["pages"]
+                            for line in page.get("text_lines", [])
+                            if not line.isspace()
+                        )
+                    ),
+                    "bad_ratio": 0.0,
                     "truth_path": str(truth_path),
                 }
             )

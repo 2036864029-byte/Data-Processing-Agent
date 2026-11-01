@@ -21,6 +21,8 @@ import pdf_inspector
 import pypdfium2 as pdfium
 from _lib import GOLDEN_ROOT, read_csv, read_json, write_json
 
+from dataagent.platform.plugins.adapters.text_layer import probe_text_layer
+
 REVIEW_ROOT = GOLDEN_ROOT / "review"
 PARSED_ROOT = GOLDEN_ROOT / "parsed"
 RENDER_SCALE = 1.6
@@ -85,6 +87,19 @@ def _diagnose(
 ) -> tuple[str, str, str]:
     if markdown.strip():
         return "ok", markdown, ""
+    kind = str(row.get("text_layer") or "")
+    if kind in {"invisible_text_layer", "garbled_text_layer"}:
+        try:
+            probed = probe_text_layer(path, pages=[page_index + 1]).pages[0]
+        except Exception:
+            probed = None
+        if probed is not None and probed.usable:
+            text = probed.text.replace("\r\n", "\n").replace("\r", "\n").strip()
+            banner = (
+                "pdf-inspector 未输出 Markdown；已通过 PDFium 恢复文本层"
+                f"（{kind}），以下为恢复文本。"
+            )
+            return "text_layer_recovered", text + ("\n" if text else ""), banner
     reason = str(row.get("ocr_reason") or "")
     if reason == "suspected_garbled_text":
         text = _page_items_text(path, page_index)
@@ -200,6 +215,7 @@ _TEMPLATE = """<!doctype html>
          padding: 1px 6px; font-size: 12px; }
   .status-needs_ocr { background: #fff4e5; color: #b26a00; }
   .status-suspected_garbled { background: #fdecea; color: #a61b1b; }
+  .status-text_layer_recovered { background: #e8f5e9; color: #1b5e20; }
   .muted { color: #777; font-size: 12px; }
   .body { display: flex; gap: 12px; }
   .pane { flex: 1 1 50%; min-width: 0; }

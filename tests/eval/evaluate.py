@@ -26,8 +26,10 @@ from _lib import (
     read_json,
     reading_order_accuracy,
     table_cell_f1,
+    text_layer_summary,
     write_json,
 )
+from recovery_probe import recovery_eval
 
 CER_MAX = 0.05
 READING_ORDER_MIN = 0.88
@@ -103,6 +105,7 @@ def evaluate() -> dict[str, Any]:
     table_pass = all(
         row["table_f1"] is None or row["table_f1"] >= TABLE_F1_MIN for row in all_rows
     )
+    recovery = recovery_eval(cer_max=CER_MAX)
     summary["gates"] = {
         "cer_max": CER_MAX,
         "reading_order_min": READING_ORDER_MIN,
@@ -110,21 +113,27 @@ def evaluate() -> dict[str, Any]:
         "cer_pass": cer_pass,
         "reading_order_pass": order_pass,
         "table_pass": table_pass,
-        "pass": cer_pass and order_pass and table_pass,
+        "recovery_pass": recovery["pass"],
+        "pass": cer_pass and order_pass and table_pass and recovery["pass"],
     }
     summary["samples"] = results
+    summary["text_layer"] = text_layer_summary(manifest)
+    summary["recovery_eval"] = recovery
     write_json(GOLDEN_ROOT / "eval_report.json", summary)
     return summary
 
 
 def _reference_grid(tables: list[dict[str, Any]]) -> list[list[str]]:
     header = [str(cell) for cell in tables[0].get("header", [])]
-    rows = [[str(cell) for cell in row] for table in tables for row in table.get("rows", [])]
+    rows = [
+        [str(cell) for cell in row]
+        for table in tables
+        for row in table.get("rows", [])
+    ]
     return [header, *rows] if header else rows
 
 
 def _combine_tables(tables: list[list[list[str]]]) -> list[list[str]]:
-    """跨页表：表头一致的后续表并入第一张（与 B7 合并逻辑同口径）。"""
     if not tables:
         return []
     combined = [row[:] for row in tables[0]]

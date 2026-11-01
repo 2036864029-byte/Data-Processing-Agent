@@ -21,8 +21,10 @@ from _lib import (
     PageSignals,
     balanced_quotas,
     classify_page,
+    classify_text_layer,
     deterministic_sample,
     mark_cross_page_tables,
+    text_layer_summary,
     write_csv,
     write_json,
 )
@@ -33,6 +35,7 @@ from dataagent.pipeline.repair.layout import (
     is_plausible_table,
     table_stats,
 )
+from dataagent.platform.plugins.adapters.text_layer import probe_text_layer
 
 CORPUS_ROOT = Path("doc/test_pdf")
 TARGET_PAGES = 200
@@ -56,6 +59,9 @@ MANIFEST_FIELDS = (
     "table_cols",
     "table_cells",
     "ocr_reason",
+    "text_layer",
+    "text_chars",
+    "bad_ratio",
     "truth_path",
 )
 
@@ -83,6 +89,7 @@ def real_candidates() -> dict[str, list[dict[str, Any]]]:
         for page_no, signals in marked.items():
             category = classify_page(signals)
             stats = page_info[page_no][1]
+            text_info = page_info[page_no][2]
             if category == "single_table" and not _long_single(stats):
                 continue
             if category == "cross_page_table" and not _long_cross(
@@ -107,6 +114,9 @@ def real_candidates() -> dict[str, list[dict[str, Any]]]:
                     "table_cols": cols,
                     "table_cells": cells,
                     "ocr_reason": signals.ocr_reason or "",
+                    "text_layer": text_info["text_layer"],
+                    "text_chars": text_info["text_chars"],
+                    "bad_ratio": text_info["bad_ratio"],
                     "truth_path": "",
                 }
             )
@@ -115,7 +125,7 @@ def real_candidates() -> dict[str, list[dict[str, Any]]]:
 
 def _page_info(
     path: Path,
-) -> dict[int, tuple[PageSignals, TableStats | None]]:
+) -> dict[int, tuple[PageSignals, TableStats | None, dict[str, Any]]]:
     extraction = pdf_inspector.extract_pages_markdown(str(path))
     table_pages = set(extraction.pages_with_tables)
     column_pages = set(extraction.pages_with_columns)
@@ -125,7 +135,14 @@ def _page_info(
         if "�" in (item.text or ""):
             bad_pages.add(item.page)
 
-    info: dict[int, tuple[PageSignals, TableStats | None]] = {}
+    probe = None
+    if ocr_pages:
+        try:
+            probe = probe_text_layer(str(path), pages=sorted(ocr_pages))
+        except Exception:
+            probe = None
+
+    info: dict[int, tuple[PageSignals, TableStats | None, dict[str, Any]]] = {}
     for page in extraction.pages:
         page_no = page.page + 1
         markdown = page.markdown or ""
@@ -148,8 +165,45 @@ def _page_info(
                 ocr_reason=page.ocr_reason,
             ),
             best,
+            _text_layer_info(
+                page_no, markdown, probe, page.needs_ocr, page.ocr_reason
+            ),
         )
     return info
+
+
+def _text_layer_info(
+    page_no: int,
+    markdown: str,
+    probe: Any,
+    needs_ocr: bool,
+    reason: str | None,
+) -> dict[str, Any]:
+    if needs_ocr:
+        probed = probe.page(page_no) if probe is not None else None
+        usable = bool(probed and probed.usable)
+        chars = probed.quality.chars if probed is not None else 0
+        bad_ratio = (
+            probed.quality.bad_chars / chars if probed is not None and chars else 0.0
+        )
+        kind = classify_text_layer(
+            needs_ocr=True,
+            has_text=False,
+            probe_usable=usable,
+            reason=reason,
+        )
+    else:
+        chars = len("".join(char for char in markdown if not char.isspace()))
+        bad = markdown.count("�")
+        bad_ratio = bad / chars if chars else 0.0
+        kind = classify_text_layer(
+            needs_ocr=False, has_text=bool(markdown.strip()), probe_usable=False
+        )
+    return {
+        "text_layer": kind,
+        "text_chars": chars,
+        "bad_ratio": round(bad_ratio, 6),
+    }
 
 
 def _long_single(stats: TableStats | None) -> bool:
@@ -242,6 +296,7 @@ def build() -> dict[str, Any]:
     write_json(GOLDEN_ROOT / "manifest.json", selected)
     write_csv(GOLDEN_ROOT / "manifest.csv", selected, MANIFEST_FIELDS)
     summary["total_selected"] = len(selected)
+    summary["text_layer"] = text_layer_summary(selected)
     summary["real"] = sum(1 for row in selected if row["source"] == "real")
     summary["constructed"] = sum(
         1 for row in selected if row["source"] == "constructed"
@@ -296,6 +351,16 @@ def _load_constructed() -> list[dict[str, Any]]:
                 "table_cols": table_cols,
                 "table_cells": table_rows * table_cols,
                 "ocr_reason": "",
+                "text_layer": "present",
+                "text_chars": len(
+                    "".join(
+                        line
+                        for page in truth["pages"]
+                        for line in page.get("text_lines", [])
+                        if not line.isspace()
+                    )
+                ),
+                "bad_ratio": 0.0,
                 "truth_path": str(truth_path),
             }
         )
