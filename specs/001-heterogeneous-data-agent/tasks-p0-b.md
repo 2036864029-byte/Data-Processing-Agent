@@ -168,16 +168,16 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T108 [B7] 合并测试 `tests/unit/pipeline/merge/test_merger.py` — 按页码重排、跨页表合并依据相邻页表头列名相似度与列一致性、标题层级重建、文档级校验（FR-017）；缺口页保留占位不导致页码错乱（US2 #1）
-- [ ] T109 [B7] 分级交付测试 `tests/unit/pipeline/output/test_delivery.py` — 缺口页占比约 0% / 3% / 8% → `complete` / `partial_with_gaps` / `needs_review`；`needs_review` 强制进入人工队列；缺口标记内嵌在产物中、不得跳过（FR-018）；**L4 人工例外经 needs_review 强制进人工队列**
-- [ ] T110 [B7] 分层报告测试 `tests/unit/pipeline/output/test_reports.py` — 总览一页 + 按原因聚合 ≤ 10 行 + 文件清单 + 按需明细；**默认只输出"有缺口的文件"明细，不预生成巨型页级明细**（FR-019）
+- [X] T108 [B7] 合并测试 `tests/unit/pipeline/merge/test_merger.py` — 按页码重排、跨页表合并依据相邻页表头列名相似度与列一致性、标题层级重建、文档级校验（FR-017）；缺口页保留占位不导致页码错乱（US2 #1）
+- [X] T109 [B7] 分级交付测试 `tests/unit/pipeline/output/test_delivery.py` — 缺口页占比约 0% / 3% / 8% → `complete` / `partial_with_gaps` / `needs_review`；`needs_review` 强制进入人工队列；缺口标记内嵌在产物中、不得跳过（FR-018）；**L4 人工例外经 needs_review 强制进人工队列**
+- [X] T110 [B7] 分层报告测试 `tests/unit/pipeline/output/test_reports.py` — 总览一页 + 按原因聚合 ≤ 10 行 + 文件清单 + 按需明细；**默认只输出"有缺口的文件"明细，不预生成巨型页级明细**（FR-019）
 
 ### 实现 B7
 
-- [ ] T111 [B7] 实现 `src/dataagent/pipeline/merge/merger.py` — 页码重排 + 跨页表合并（列名相似度与列一致性）+ 标题层级重建 + 文档级校验（文档级校验调用 B8 规则引擎 `checks[]`，业务勾稽，SC-013）
-- [ ] T112 [B7] 实现 `src/dataagent/pipeline/output/delivery.py` — 分级交付三档 + 缺口占位内嵌产物
-- [ ] T113 [B7] 实现 `src/dataagent/pipeline/output/reports.py` — 分层报告（总览 / 聚合 / 清单 / 按需明细）
-- [ ] T114 [B7] 实现输出格式 — JSON / CSV / Markdown / Excel（openpyxl，`uv add openpyxl`）+ 数据库写入（经 `platform/store/sql/`），全部为 P0 交付格式（FR-018）
+- [X] T111 [B7] 实现 `src/dataagent/pipeline/merge/merger.py` — 页码重排 + 跨页表合并（列名相似度与列一致性）+ 标题层级重建 + 文档级校验（文档级校验调用 B8 规则引擎 `checks[]`，业务勾稽，SC-013）
+- [X] T112 [B7] 实现 `src/dataagent/pipeline/output/delivery.py` — 分级交付三档 + 缺口占位内嵌产物
+- [X] T113 [B7] 实现 `src/dataagent/pipeline/output/reports.py` — 分层报告（总览 / 聚合 / 清单 / 按需明细）
+- [X] T114 [B7] 实现输出格式 — JSON / CSV / Markdown / Excel（openpyxl，`uv add openpyxl`）+ 数据库写入（经 `platform/store/sql/`），全部为 P0 交付格式（FR-018）
 
 **Checkpoint**: 合并 / 分级 / 报告测试全绿 → commit + push
 
