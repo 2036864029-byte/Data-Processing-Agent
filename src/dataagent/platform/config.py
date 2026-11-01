@@ -58,8 +58,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # 存储与队列（A4 落点）
-    postgres_url: str = "postgresql+psycopg://dataagent:dataagent@localhost:5432/dataagent"
-    redis_url: str = "redis://localhost:6379/0"
+    # 默认用专用宿主端口，避免与本机其他 Docker 项目冲突（如 Langfuse 占 5432/6379）。
+    # compose 内部走服务名，不受这里影响。
+    postgres_url: str = "postgresql+psycopg://dataagent:dataagent@localhost:15432/dataagent"
+    redis_url: str = "redis://localhost:16379/0"
     object_store_backend: Literal["local", "s3"] = "local"
     local_store_root: Path = Path("var/objects")
     s3_endpoint: str = ""

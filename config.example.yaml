@@ -7,8 +7,10 @@ env: dev
 log_level: INFO
 
 # 存储与队列（A4 落点）
-postgres_url: postgresql+psycopg://dataagent:dataagent@localhost:5432/dataagent
-redis_url: redis://localhost:6379/0
+# 默认专用宿主端口：避免与本机其他 Docker 项目（Langfuse 5432/6379 等）冲突；
+# compose 内部按服务名连接，不经过这两个端口。
+postgres_url: postgresql+psycopg://dataagent:dataagent@localhost:15432/dataagent
+redis_url: redis://localhost:16379/0
 object_store_backend: local        # local | s3
 local_store_root: var/objects
 s3_endpoint: ""

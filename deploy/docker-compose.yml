@@ -17,6 +17,10 @@ services:
       POSTGRES_USER: dataagent
       POSTGRES_PASSWORD: dataagent
       POSTGRES_DB: dataagent
+    # 专用宿主端口：本机 5432 已被 Langfuse 占用，招标项目用 5433
+    ports:
+      - "127.0.0.1:15432:5432"
+    mem_limit: 512m
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,6 +31,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    # 专用宿主端口：本机 6379 已被 Langfuse 占用，招标项目用 6380
+    ports:
+      - "127.0.0.1:16379:6379"
+    mem_limit: 256m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -40,7 +48,11 @@ services:
     environment:
       MINIO_ROOT_USER: dataagent
       MINIO_ROOT_PASSWORD: dataagent-secret
-    # 仅容器网络内访问（api / worker）；需要控制台时按需临时加 `ports: ["9000:9000","9001:9001"]`
+    # 专用宿主端口：9000 已被 Langfuse ClickHouse 占用，Milvus MinIO 用 9003/9004
+    ports:
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:19001:9001"
+    mem_limit: 512m
     volumes:
       - miniodata:/data
 
@@ -50,8 +62,10 @@ services:
       dockerfile: deploy/Dockerfile
     command: ["dataagent", "up", "--host", "0.0.0.0", "--port", "8080", "--role", "api"]
     environment: *dataagent-env
+    # 可用 .env 覆盖宿主端口，避免与其他项目抢 8080
     ports:
-      - "8080:8080"
+      - "${DATAAGENT_API_PORT:-8080}:8080"
+    mem_limit: 512m
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +80,7 @@ services:
       dockerfile: deploy/Dockerfile
     command: ["dataagent", "up", "--role", "worker"]
     environment: *dataagent-env
+    mem_limit: 1g
     depends_on:
       redis:
         condition: service_healthy

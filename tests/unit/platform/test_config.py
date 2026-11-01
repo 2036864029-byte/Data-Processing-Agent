@@ -82,6 +82,9 @@ def test_defaults_present(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.batch_size == 32
     assert s.plan_max_model_calls == 8
     assert s.object_store_backend == "local"
+    # 专用宿主端口：避开本机其他 Docker 项目（Langfuse 5432/6379 等）
+    assert ":15432/" in s.postgres_url
+    assert ":16379/" in s.redis_url
 
 
 def test_unknown_yaml_key_rejected(tmp_path: object, monkeypatch: pytest.MonkeyPatch) -> None:
