@@ -196,20 +196,20 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T051 [A8] 8 个 Policy Protocol 测试 `tests/unit/contracts/test_policies.py` — 逐字引用 contracts/policies.md 签名（PlanPolicy / ReplanPolicy / StrategyPolicy / RoutePolicy / TierPolicy / OperatorPolicy / AttemptPolicy / EscalationPolicy）；**无状态**（实例不得持有跨调用状态，入参出参可重放）；**可注入假实现**
-- [ ] T052 [A8] 页级确定性测试 `tests/unit/kernel/policies/test_page_level.py` — Route / Tier / Operator / Attempt / Escalation 规则实现：同一输入两次调用结果一致；输入输出可序列化并写 Trace（页级决策参与审计）
-- [ ] T053 [A8] 任务级规则阈值测试 `tests/unit/kernel/policies/test_task_level.py` — ReplanPolicy 阈值触发（如 40% 页失败 → 整本转 OCR）；StrategyPolicy 整本策略切换；**P0 用规则阈值，M3 才可加模型实现**（宪法原则 I + research D3）
+- [X] T051 [A8] 8 个 Policy Protocol 测试 `tests/unit/contracts/test_policies.py` — 逐字引用 contracts/policies.md 签名（PlanPolicy / ReplanPolicy / StrategyPolicy / RoutePolicy / TierPolicy / OperatorPolicy / AttemptPolicy / EscalationPolicy）；**无状态**（实例不得持有跨调用状态，入参出参可重放）；**可注入假实现**
+- [X] T052 [A8] 页级确定性测试 `tests/unit/kernel/policies/test_page_level.py` — Route / Tier / Operator / Attempt / Escalation 规则实现：同一输入两次调用结果一致；输入输出可序列化并写 Trace（页级决策参与审计）
+- [X] T053 [A8] 任务级规则阈值测试 `tests/unit/kernel/policies/test_task_level.py` — ReplanPolicy 阈值触发（如 40% 页失败 → 整本转 OCR）；StrategyPolicy 整本策略切换；**P0 用规则阈值，M3 才可加模型实现**（宪法原则 I + research D3）
 
 ### 实现 A8
 
-- [ ] T054 [A8] 实现 `src/dataagent/contracts/policies.py` — 8 个决策点 Protocol（无内部依赖叶子模块）
-- [ ] T055 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_route.py` — RoutePolicy 规则实现（输入 PageProfile class/layout → 链路 ID）
-- [ ] T056 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_tier.py` — TierPolicy 规则实现（PageProfile + `extract_quality` → T0–T3）
-- [ ] T057 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_operator.py` — OperatorPolicy 规则实现（读 `pipeline/repair/mapping.py`，禁运行时推断）
-- [ ] T058 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_attempt.py` — AttemptPolicy 规则实现（三层停机：`changed == false` 立即停机、不重试同参数）
-- [ ] T059 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_escalation.py` — EscalationPolicy 规则实现（预算耗尽 → 升级人工）
-- [ ] T060 [A8] 实现 `src/dataagent/kernel/policies/rule_replan.py` + `rule_strategy.py` — ReplanPolicy / StrategyPolicy P0 规则阈值实现（任务级）
-- [ ] T061 [A8] 建立 `src/dataagent/kernel/policies/model_*.py` 占位文件（M3 才实现，**P0 不引用 pydantic-ai**）——满足 grep 门禁「`pydantic_ai` 仅 `kernel/policies/model_*`」，P0 期零引用、门禁恒绿
+- [X] T054 [A8] 实现 `src/dataagent/contracts/policies.py` — 8 个决策点 Protocol（无内部依赖叶子模块）
+- [X] T055 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_route.py` — RoutePolicy 规则实现（输入 PageProfile class/layout → 链路 ID）
+- [X] T056 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_tier.py` — TierPolicy 规则实现（PageProfile + `extract_quality` → T0–T3）
+- [X] T057 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_operator.py` — OperatorPolicy 规则实现（读 `pipeline/repair/mapping.py`，禁运行时推断）
+- [X] T058 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_attempt.py` — AttemptPolicy 规则实现（三层停机：`changed == false` 立即停机、不重试同参数）
+- [X] T059 [P] [A8] 实现 `src/dataagent/kernel/policies/rule_escalation.py` — EscalationPolicy 规则实现（预算耗尽 → 升级人工）
+- [X] T060 [A8] 实现 `src/dataagent/kernel/policies/rule_replan.py` + `rule_strategy.py` — ReplanPolicy / StrategyPolicy P0 规则阈值实现（任务级）
+- [X] T061 [A8] 建立 `src/dataagent/kernel/policies/model_*.py` 占位文件（M3 才实现，**P0 不引用 pydantic-ai**）——满足 grep 门禁「`pydantic_ai` 仅 `kernel/policies/model_*`」，P0 期零引用、门禁恒绿
 
 **Checkpoint**: 页级确定性 + 任务级阈值全绿 → commit + push
 
