@@ -51,3 +51,11 @@ def idempotency_key(
     同一幂等键必须返回同一 artifact（内容寻址）。
     """
     return f"{document_hash}:{page_range}:{engine}:{params_hash}:{rulepack_version}"
+
+
+def result_cache_key(document_hash: str, params_hash: str, engine_ref: str) -> str:
+    """结果缓存键 = 内容哈希 + 参数哈希 + `id@version`（plugin-manifest.md 关键语义）。
+
+    仅 `determinism: deterministic` 的插件允许使用该键缓存结果。
+    """
+    return f"{document_hash}:{params_hash}:{engine_ref}"

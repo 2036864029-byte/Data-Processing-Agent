@@ -79,16 +79,16 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T083 [B3] 两级路由测试 `tests/unit/pipeline/route/test_routes.py` — 一级为边界与格式判定、**二级仅在 PDF 家族内**调用 PDF 分类做页级路由；非 PDF 不得经过 PDF 分类能力；每条路由决策带理由与决策时画像快照并落库，可事后解释（FR-004）
-- [ ] T084 [B3] 批级抽取测试 `tests/unit/pipeline/route/test_batching.py` — 同一文档页按批一次传入、批内不拆（默认批 32 页）、扫描页单独成批不与普通页混批、同一文档所有批落在同一处理单元（FR-006；G4 批级性能）
-- [ ] T085 [B3] engine.pdf 双 capability 测试 — `pdf.classify` 必须能在不产内容前提下完成判定（`markdown = None`、`cmap_gaps` 恒为空）；`pdf.text.extract` 产不可变 artifact；仅 `deterministic` 允许结果缓存（缓存键 = 内容哈希 + 参数哈希 + `id@version`，宪法原则 I）
+- [X] T083 [B3] 两级路由测试 `tests/unit/pipeline/route/test_routes.py` — 一级为边界与格式判定、**二级仅在 PDF 家族内**调用 PDF 分类做页级路由；非 PDF 不得经过 PDF 分类能力；每条路由决策带理由与决策时画像快照并落库，可事后解释（FR-004）
+- [X] T084 [B3] 批级抽取测试 `tests/unit/pipeline/route/test_batching.py` — 同一文档页按批一次传入、批内不拆（默认批 32 页）、扫描页单独成批不与普通页混批、同一文档所有批落在同一处理单元（FR-006；G4 批级性能）
+- [X] T085 [B3] engine.pdf 双 capability 测试 — `pdf.classify` 必须能在不产内容前提下完成判定（`markdown = None`、`cmap_gaps` 恒为空）；`pdf.text.extract` 产不可变 artifact；仅 `deterministic` 允许结果缓存（缓存键 = 内容哈希 + 参数哈希 + `id@version`，宪法原则 I）
 
 ### 实现 B3
 
-- [ ] T086 [B3] `uv add pdf-inspector` 并实现 `src/dataagent/platform/plugins/adapters/engine_pdf.py` — 双 capability 适配（分类 / 抽取），接口依据 `doc/pdf-inspector.md`；页码基准经 `contracts/pages.py` 转换（插件接口 0-indexed 与 1-indexed 混用，全工程仅一处转换点）；先确认目标平台预编译包可用（research R10）
-- [ ] T087 [B3] 实现 `engine_csv.py` / `engine_text.py` — manifest 契约接入（`tabular.text.extract` / `text.text.extract`）
-- [ ] T088 [B3] 实现 `src/dataagent/pipeline/route/routes.py` — 两级路由，每条决策带理由 + 画像快照落库
-- [ ] T089 [B3] 实现分批器 — 默认批 32 页、扫描页单独成批、批内不拆（文件打开次数 ≤ ⌈页数/批大小⌉ + 2，宪法性能预算）
+- [X] T086 [B3] `uv add pdf-inspector` 并实现 `src/dataagent/platform/plugins/adapters/engine_pdf.py` — 双 capability 适配（分类 / 抽取），接口依据 `doc/pdf-inspector.md`；页码基准经 `contracts/pages.py` 转换（插件接口 0-indexed 与 1-indexed 混用，全工程仅一处转换点）；先确认目标平台预编译包可用（research R10）
+- [X] T087 [B3] 实现 `engine_csv.py` / `engine_text.py` — manifest 契约接入（`tabular.text.extract` / `text.text.extract`）
+- [X] T088 [B3] 实现 `src/dataagent/pipeline/route/routes.py` — 两级路由，每条决策带理由 + 画像快照落库
+- [X] T089 [B3] 实现分批器 — 默认批 32 页、扫描页单独成批、批内不拆（文件打开次数 ≤ ⌈页数/批大小⌉ + 2，宪法性能预算）
 
 **Checkpoint**: 路由 / 批级 / 双 capability 测试全绿 → commit + push
 
