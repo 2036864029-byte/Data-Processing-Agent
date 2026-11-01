@@ -150,16 +150,16 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T037 [A6] supervisor 状态机 / 续跑测试 `tests/unit/kernel/test_supervisor.py` — 任务沿唯一转移表推进；**恢复从 resume_point 后的批继续、已完成批 0 重做**；批级事务边界（产物 + 状态都成功才完成，先写内容再写索引，G6）
-- [ ] T038 [A6] 心跳按进展测试 `tests/unit/platform/runtime/test_heartbeat.py` — 连续 60s 无心跳判死；按「进展」而非「耗时」判定（research D7）
-- [ ] T039 [A6] 资源预检测试 `tests/unit/platform/runtime/test_resources.py` — 建议值公式 `min(核数×1.25, 可用内存/单进程上限, 32)`（禁写死 `cpu_count()`，宪法「性能与稳定性预算」）；用户覆盖后超限告警并降级；OOM 降批链 32→16→8、降到最低仍失败则停止并告警
-- [ ] T040 [A6] 进程池隔离测试 `tests/unit/platform/runtime/test_pool.py` — CPU 密集路径用**进程池**（禁线程池）；子进程崩溃不杀主进程（Rust 扩展崩溃可捕获，PRD 4.8.5）
+- [X] T037 [A6] supervisor 状态机 / 续跑测试 `tests/unit/kernel/test_supervisor.py` — 任务沿唯一转移表推进；**恢复从 resume_point 后的批继续、已完成批 0 重做**；批级事务边界（产物 + 状态都成功才完成，先写内容再写索引，G6）
+- [X] T038 [A6] 心跳按进展测试 `tests/unit/platform/runtime/test_heartbeat.py` — 连续 60s 无心跳判死；按「进展」而非「耗时」判定（research D7）
+- [X] T039 [A6] 资源预检测试 `tests/unit/platform/runtime/test_resources.py` — 建议值公式 `min(核数×1.25, 可用内存/单进程上限, 32)`（禁写死 `cpu_count()`，宪法「性能与稳定性预算」）；用户覆盖后超限告警并降级；OOM 降批链 32→16→8、降到最低仍失败则停止并告警
+- [X] T040 [A6] 进程池隔离测试 `tests/unit/platform/runtime/test_pool.py` — CPU 密集路径用**进程池**（禁线程池）；子进程崩溃不杀主进程（Rust 扩展崩溃可捕获，PRD 4.8.5）
 
 ### 实现 A6
 
-- [ ] T041 [A6] 实现 `src/dataagent/platform/runtime/heartbeat.py` — 心跳按进展判定
-- [ ] T042 [A6] 实现 `src/dataagent/platform/runtime/resources.py` — 资源预检 + 建议值 + 覆盖可行性校验 + 降批链
-- [ ] T043 [A6] 实现 `src/dataagent/kernel/supervisor.py` — 控制面调度：状态机驱动 + 批次派发 + `resume_point` 续跑 + 批级事务边界；以三条角色消息（`ParseRequest` / `PageReport` / `OperatorResult`）为交互边界，禁止角色间长同步等待（contracts/role-messages.md）
+- [X] T041 [A6] 实现 `src/dataagent/platform/runtime/heartbeat.py` — 心跳按进展判定
+- [X] T042 [A6] 实现 `src/dataagent/platform/runtime/resources.py` — 资源预检 + 建议值 + 覆盖可行性校验 + 降批链
+- [X] T043 [A6] 实现 `src/dataagent/kernel/supervisor.py` — 控制面调度：状态机驱动 + 批次派发 + `resume_point` 续跑 + 批级事务边界；以三条角色消息（`ParseRequest` / `PageReport` / `OperatorResult`）为交互边界，禁止角色间长同步等待（contracts/role-messages.md）
 
 **Checkpoint**: 续跑 / 心跳 / 资源 / 进程池测试全绿 → commit + push
 
