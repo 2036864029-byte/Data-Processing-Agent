@@ -173,16 +173,16 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T044 [A7] CLI 契约测试 `tests/e2e/cli/test_cli.py` — `dataagent up / status / logs -f / plugin list / doctor / bench` 存在且按 cli-api.md 行为；`doctor` 对端口占用、磁盘不足、模型缺失给出明确修复建议；CLI 唯一入口（Web 由 CLI 拉起）
-- [ ] T045 [A7] `/status` 只读页测试 `tests/e2e/api/test_status.py` — GET `/status` 返回服务端渲染页面、**不改变任何状态**；GET `/health` 200；API 无状态（所有状态进 PG）
-- [ ] T046 [A7] worker 进程壳测试 `tests/e2e/worker/test_worker.py` — worker 无状态（任务归属靠队列）、从队列取批、心跳按进展；`apps/worker` 内禁 `asyncio.run`（grep 门禁，G9）
+- [X] T044 [A7] CLI 契约测试 `tests/e2e/cli/test_cli.py` — `dataagent up / status / logs -f / plugin list / doctor / bench` 存在且按 cli-api.md 行为；`doctor` 对端口占用、磁盘不足、模型缺失给出明确修复建议；CLI 唯一入口（Web 由 CLI 拉起）
+- [X] T045 [A7] `/status` 只读页测试 `tests/e2e/api/test_status.py` — GET `/status` 返回服务端渲染页面、**不改变任何状态**；GET `/health` 200；API 无状态（所有状态进 PG）
+- [X] T046 [A7] worker 进程壳测试 `tests/e2e/worker/test_worker.py` — worker 无状态（任务归属靠队列）、从队列取批、心跳按进展；`apps/worker` 内禁 `asyncio.run`（grep 门禁，G9）
 
 ### 实现 A7
 
-- [ ] T047 [A7] 实现 `src/dataagent/apps/cli/` — `dataagent` 命令入口：up（自检→启动后端就绪→拉起 worker + API→打印 `http://127.0.0.1:8080`）/ status / logs -f / plugin list / doctor / bench 骨架（cli-api.md；CLI 是唯一入口，Web 由 CLI 拉起，同一进程两个壳）
-- [ ] T048 [P] [A7] 实现 `src/dataagent/apps/api/` — 无状态 HTTP 骨架 + `/status` 只读页（SSR + 定时刷新，无构建链）+ `/health`；上传文件先进对象存储、不进 API 进程内存（骨架）
-- [ ] T049 [A7] 实现 `src/dataagent/apps/worker/` — 进程壳：从队列取批 → 调 pipeline + `kernel/policies`（P0-A 期为空壳循环，真实阶段 P0-B 接入）→ 心跳 → 结果落库
-- [ ] T050 [P] [A7] 实现 `deploy/` — Docker Compose（PG / Redis / MinIO + api + worker，同一份 compose 换外部后端地址即可迁移多机）+ Dockerfile + offline 包骨架（镜像 tar + wheel + 模型 + 字体目录约定，宪法「交付形态」）
+- [X] T047 [A7] 实现 `src/dataagent/apps/cli/` — `dataagent` 命令入口：up（自检→启动后端就绪→拉起 worker + API→打印 `http://127.0.0.1:8080`）/ status / logs -f / plugin list / doctor / bench 骨架（cli-api.md；CLI 是唯一入口，Web 由 CLI 拉起，同一进程两个壳）
+- [X] T048 [P] [A7] 实现 `src/dataagent/apps/api/` — 无状态 HTTP 骨架 + `/status` 只读页（SSR + 定时刷新，无构建链）+ `/health`；上传文件先进对象存储、不进 API 进程内存（骨架）
+- [X] T049 [A7] 实现 `src/dataagent/apps/worker/` — 进程壳：从队列取批 → 调 pipeline + `kernel/policies`（P0-A 期为空壳循环，真实阶段 P0-B 接入）→ 心跳 → 结果落库
+- [X] T050 [P] [A7] 实现 `deploy/` — Docker Compose（PG / Redis / MinIO + api + worker，同一份 compose 换外部后端地址即可迁移多机）+ Dockerfile + offline 包骨架（镜像 tar + wheel + 模型 + 字体目录约定，宪法「交付形态」）
 
 **Checkpoint**: Docker 环境 up / status / doctor 全绿 → commit + push
 

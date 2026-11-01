@@ -1,0 +1,25 @@
+# 构建上下文裁剪（镜像只复制 pyproject/uv.lock/src/config.example.yaml）
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.import_linter_cache/
+dist/
+build/
+*.egg-info/
+tests/
+specs/
+docs/
+.specify/
+.workbuddy/
+.claude/
+var/
+*.log

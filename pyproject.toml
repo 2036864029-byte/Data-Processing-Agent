@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "dataagent"
 version = "0.1.0"
@@ -15,8 +19,14 @@ dependencies = [
     "sqlalchemy>=2.1.6",
 ]
 
+[project.scripts]
+dataagent = "dataagent.apps.cli:main"
+
 [tool.uv]
-package = false
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dataagent"]
 
 [dependency-groups]
 dev = [

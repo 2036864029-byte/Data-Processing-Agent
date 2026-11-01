@@ -1,0 +1,75 @@
+# 单机多机构同构（宪法 VI / G10）：同一份 compose，把 *_URL 指向外部实例即可迁移多机。
+name: dataagent
+
+x-dataagent-env: &dataagent-env
+  DATAAGENT_POSTGRES_URL: postgresql+psycopg://dataagent:dataagent@postgres:5432/dataagent
+  DATAAGENT_REDIS_URL: redis://redis:6379/0
+  DATAAGENT_OBJECT_STORE_BACKEND: s3
+  DATAAGENT_S3_ENDPOINT: http://minio:9000
+  DATAAGENT_S3_ACCESS_KEY: dataagent
+  DATAAGENT_S3_SECRET_KEY: dataagent-secret
+  DATAAGENT_S3_BUCKET: dataagent
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dataagent
+      POSTGRES_PASSWORD: dataagent
+      POSTGRES_DB: dataagent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataagent"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    # 固定标签（避免 latest 漂移；本机缓存可达的版本）
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: dataagent
+      MINIO_ROOT_PASSWORD: dataagent-secret
+    # 仅容器网络内访问（api / worker）；需要控制台时按需临时加 `ports: ["9000:9000","9001:9001"]`
+    volumes:
+      - miniodata:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["dataagent", "up", "--host", "0.0.0.0", "--port", "8080", "--role", "api"]
+    environment: *dataagent-env
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["dataagent", "up", "--role", "worker"]
+    environment: *dataagent-env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  miniodata:

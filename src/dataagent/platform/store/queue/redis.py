@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import cast
 
 import redis
@@ -87,3 +88,20 @@ class RedisQueue(Queue):
         except redis.exceptions.ResponseError as exc:
             if "BUSYGROUP" not in str(exc):
                 raise
+
+
+def redis_queue_from_url(
+    url: str,
+    *,
+    stream: str,
+    group: str = "workers",
+    consumer: str | None = None,
+) -> RedisQueue:
+    """按 Redis URL 构造队列（连接惰性建立；consumer 默认 `worker-<pid>`）。"""
+    client = redis.Redis.from_url(url)
+    return RedisQueue(
+        client,
+        stream=stream,
+        group=group,
+        consumer=consumer or f"worker-{os.getpid()}",
+    )
