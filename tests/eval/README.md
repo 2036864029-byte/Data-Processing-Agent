@@ -14,7 +14,12 @@
 # B. 采集每页代理指标（待端到端管线接通后替换为系统 L1 指标）
 .venv/Scripts/python.exe tests/eval/collect_metrics.py
 
-# D. 无人工标注时输出 insufficient_labels；完成打分后回填 annotations.csv 再跑
+# 生成 60 页对照查看器（左页图 + 右产物 + 打分控件）
+.venv/Scripts/python.exe tests/eval/prepare_review.py
+# 用浏览器打开 var/golden/review/index.html 逐页打分，完成后导出 annotations_filled.csv
+.venv/Scripts/python.exe tests/eval/import_annotations.py
+
+# D. 无人工标注时输出 insufficient_labels；完成打分后运行
 .venv/Scripts/python.exe tests/eval/calibrate.py
 
 # 构造样本自动评测（CER / 阅读顺序 / 表格 cell F1）
@@ -38,6 +43,9 @@
 | `annotations.csv` | 全量标注模板（已存在则不覆盖） |
 | `human_sheet.csv` | 60 页人工打分子集 |
 | `metrics.csv` | 每页代理指标（标定输入） |
+| `review/index.html` | 60 页并排对照查看器（左页图 / 右产物 / 打分） |
+| `parsed/<sample_id>.md` | 每页产物（查看器右侧内容） |
+| `annotations_filled.csv` | 查看器导出的打分（导入后写回 annotations.csv） |
 | `calibration_report.json` | 权重、阈值、留出集 Spearman / 一致率 |
 | `eval_report.json` | 构造样本自动评测与门禁 |
 | `viewer.html` | 样本清单查看页 |

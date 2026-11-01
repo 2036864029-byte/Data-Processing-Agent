@@ -13,10 +13,14 @@ from _lib import (
     mark_cross_page_tables,
     parse_markdown_tables,
     plain_text,
+    read_csv,
     reading_order_accuracy,
     spearman,
     table_cell_f1,
+    write_csv,
 )
+from annotations_template import ANNOTATION_FIELDS
+from import_annotations import merge
 
 
 def test_cer_identical_and_substitution() -> None:
@@ -129,3 +133,46 @@ def test_best_agreement_threshold() -> None:
 
     assert agreement == 1.0
     assert 0.4 < threshold <= 0.9
+
+
+def test_annotation_import_merges_scores(tmp_path) -> None:
+    annotations = tmp_path / "annotations.csv"
+    filled = tmp_path / "annotations_filled.csv"
+    write_csv(
+        annotations,
+        [
+            {
+                "sample_id": "S-0001",
+                "category": "text_only",
+                "source": "real",
+                "file": "x.pdf",
+                "page_no": "1",
+            }
+        ],
+        ANNOTATION_FIELDS,
+    )
+    write_csv(
+        filled,
+        [
+            {
+                "sample_id": "S-0001",
+                "dim_text": "3",
+                "dim_structure": "2",
+                "dim_semantic": "3",
+                "dim_layout": "2",
+                "needs_manual": "否",
+                "error_notes": "",
+                "label_source": "human",
+            }
+        ],
+        ("sample_id", "dim_text", "dim_structure", "dim_semantic", "dim_layout",
+         "needs_manual", "error_notes", "label_source"),
+    )
+
+    result = merge(filled, annotations)
+
+    row = read_csv(annotations)[0]
+    assert result == {"merged": 1, "skipped": 0, "total": 1}
+    assert row["label_source"] == "human"
+    assert row["total"] == "10"
+    assert row["needs_manual"] == "否"
