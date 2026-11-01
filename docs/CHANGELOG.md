@@ -23,6 +23,38 @@
   - A8 决策点策略化：8 个 Policy Protocol、页级确定性规则、任务级阈值规则、模型实现占位
   - A9 可观测与审计：JSON 日志 + span、FR-025 指标、审计留痕、旁路告警
 
+### P0-B 功能模块（B1–B9，2026-11-01）
+
+- B1 接入与文件级体检：folder/upload、内容哈希去重、11 项三态体检、待确认队列
+- B2 一级格式判定：magic/编码/分隔符五家族三态、后缀不符事件、歧义双跑
+- B3 两级路由与引擎接入：engine.pdf / engine.csv / engine.text、批级抽取
+- B4 页面画像两段写入：路由段先写、质量段后写、layout 抽取后回填
+- B5 质检：L1 全量逐页 + L2 分层抽样 + 三档性能档位 + 先落库再触发下游
+- B6 T1 后处理与修复：算子库、reason 映射、增强回路、失败页聚包、降级框架
+- B7 合并/交付/报告/输出：跨页表、缺口占位、三档交付、JSON/CSV/Markdown/Excel
+- B8 RulePack 与受限表达式：自建 JSONLogic 求值器、版本化/回滚/dry-run、声明式字段提取
+- B9 黄金集工具链：六类 200 页、构造样本、对照查看器、标定与评测脚本
+
+### 可复现性基线（P0-B）
+
+- **插件版本**：`engine.pdf@1.0.0`、`engine.csv@1.0.0`、`engine.text@1.0.0`；
+  `pdf-inspector==1.25.2`（uv.lock 锁定）；`pypdfium2` 用于隐藏文本层探测
+- **阈值**：
+  - 体检：单文件 ≤2GB、页树深度 ≤50、单页 ≤14400pt、对象 ≤200 万、
+    资源嵌套 ≤30、解压比 ≤200
+  - 一级判定：≤256KB / ≤50ms；分隔符一致性 >0.8 且 spread ≤1 → tabular；
+    0.5–0.8 → 歧义
+  - L1 门控：glyph_coverage ≥0.95、cid_unmapped ≤0.01、empty_region ≤0.30、
+    table_cell_fill ≥0.90、reading_order ≥0.88、header_footer ≤0.05；
+    char_density 阈值 text/mixed/scanned = 2.0/1.0/0.2
+  - L2：quality 15 页 / balanced 5 页 / fast fail+首末页；增强轮次 3/2/1
+  - 修复回路：3 轮 / 2s / 质量提升 ≥5% 且缺陷数减少；同码唯一
+  - 聚包：50–100 页；交付 gap_tolerance=5%
+  - 隐藏文本层：≥50 字 / `U+FFFD` ≤1% / 可打印 ≥95%；
+    标题标定：≥30 文本页无标题触发、标题 ≤80 字且不含多个编号标记
+- **缺陷码**：11 码封闭集，无增减（见 `contracts/defects.py` 与 `contracts/defect-codes.md`）
+- **已知限制**：端到端 runner、B-PLAN、bench 压测尚未完成（见 ADR-0006）
+
 ### 可复现性基线（P0-A）
 
 - **插件版本**：`engine.pdf` 仅落地契约（api_version=1），具体实现版本在 P0-B 接入时 pin；
