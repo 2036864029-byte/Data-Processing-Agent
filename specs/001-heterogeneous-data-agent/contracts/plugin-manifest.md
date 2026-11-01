@@ -78,4 +78,7 @@ manifest:
 | 跨页表续接、页眉页脚剔除 | ❌ 插件 | 自建 |
 | 扫描件 OCR 执行 | ❌ 插件 | `engine.ocr` 插件（P1） |
 
+**隐藏文本层（适配器行为）**：pdf-inspector 忽略扫描件中的不可见文本层（`invisible_text_layer` 页返回空）；`engine.pdf` 适配器可用 PDFium 探测并按质量门复用，不改变 `pdf.classify` / `pdf.text.extract` 的 capability 签名与输入输出 schema。
+
+
 **页码基准铁律**：插件不同接口 / 同一返回对象内部页码基准不一致（0-indexed 与 1-indexed 混用），系统内一律 1-indexed，**字段级转换点全工程仅一处**（`contracts/pages.py`），断言式单测固定。

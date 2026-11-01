@@ -41,6 +41,7 @@
 | 分组 | 字段 | 写入时机 |
 | ---- | ---- | ---- |
 | `class` | `pdf_type`、`class_confidence`（文档级）、`route`（native/ocr/vlm）、`route_reason[]`（机器可读，**原样保留**） | 路由阶段（`detect_pdf` 后） |
+| `text_layer` | `present` / `invisible_recovered` / `absent`；附 `text_chars`、`bad_ratio` | 路由阶段（PDFium 探测）；恢复后标记 |
 | `layout` | `columns`、`has_table`、`is_complex`、`rotation` | 路由阶段 |
 | `signals` | `char_density`、`glyph_coverage`、`empty_region_ratio`、`header_footer_ratio` | 解析完成后 |
 | `quality` | `extract_quality`（页级 0–1）、`tier`（T0–T3） | 解析完成后（L1 后） |
@@ -48,6 +49,7 @@
 **规则**：
 - `route_reason` 原样落库，不裁剪 / 不映射 / 不丢弃；映射成缺陷码发生在 4.5.7 的配置表，不在落库时。
 - `class_confidence` 是文档级分类把握，不可当页级质量分。
+- **隐藏文本层复用**：扫描件若存在隐藏 OCR 文本层（PDFium 可读）且质量达标（字符数 ≥ 50、`U+FFFD` ≤ 1%、可打印率 ≥ 95%），`text_layer = invisible_recovered`，`route` 改为 `native`，`route_reason` 追加 `text_layer_recovered`；质量不达标才置 `needs_ocr`。恢复页的 `PageArtifact.warnings` 同时记录 `text_layer_recovered`，报告须声明来源。
 - `glyph_coverage` 来自 `cmap_gaps`，**仅抽取后可得**（`detect_pdf` 阶段恒为空）→ 因此两段写入。
 - 禁 `page_filter` 引用 `extract_quality`（因果循环）。
 

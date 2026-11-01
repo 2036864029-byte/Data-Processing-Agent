@@ -254,6 +254,32 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ---
 
+## Phase 12: P0 修订 — 隐藏文本层复用与 PDF 适配器质量增强
+
+**Goal**: 修正 PDF 适配器的三个实测问题：(1) 扫描件带隐藏 OCR 文本层时被误判 OCR，应先探测复用；(2) 抽取阶段才能拿到 layout（`detect_pdf` 不填表格/分栏/编码），需在画像质量段回填；(3) `extract_pages_markdown` 遇任一 `U+FFFD` 清空整页、标题层级弱于文档级 `process_pdf`，需按需标题标定与文本恢复。**不改变五层架构、状态机、调度器、存储抽象与插件契约。**
+
+**Independent Test**: 574 页扫描书（含隐藏文本层）可用页不再送 OCR 且路由为 native；纯扫描页仍走 OCR；恢复页在画像/档位/报告中可追溯；正常招标文档不触发第二遍解析；全量回归与六项门禁保持全绿。
+
+### 测试（TDD：先红后绿）⚠️
+
+- [ ] T130 [R1] 文本层探测与质量门测试 `tests/unit/platform/plugins/adapters/test_text_layer.py` — 三类样本：隐藏 OCR 文本层（本语料 574 页书）、纯扫描无文本层、正常文本 PDF；质量门（字符数 ≥ 50、`U+FFFD` 占比 ≤ 1%、可打印率 ≥ 95%）；逐页判定与文档级汇总；不可用时明确返回 absent
+- [ ] T131 [R1] engine.pdf 恢复测试 `tests/unit/platform/plugins/adapters/test_engine_pdf_recovery.py` — `invisible_text_layer` 页探测成功后产出文本 artifact、`warnings` 标记 `text_layer_recovered`、不再标记需 OCR；探测失败仍保留 `needs_ocr`
+- [ ] T132 [R2] 画像/路由/档位接入测试 — 抽取后 layout 回填（表格/分栏/旋转/复杂度）；文本层恢复页 route=native 且理由含 `text_layer_recovered`；`RuleTierPolicy` 不再对恢复页强制 T3；L1 输入来自恢复文本
+- [ ] T133 [R3] `process_pdf` 标题标定测试 — 仅在乱码页/标题异常时触发；标题行按规范化文本 + 页顺序回填；`process_pdf` 1-indexed 与 extract 0-indexed 语义隔离；标定失败标记 `heading_calibration_failed` 且不阻塞
+- [ ] T134 [R4] 黄金集口径更新测试 — manifest 增加 `text_layer` / `text_chars` / `bad_ratio`，扫描类拆分 `invisible_text_layer` 与 `pure_scan`；恢复率与恢复页 CER 进入自动评测
+
+### 实现
+
+- [ ] T135 [R1] `uv add pypdfium2`（runtime）并实现 `src/dataagent/platform/plugins/adapters/text_layer.py` — PDFium 逐页读取隐藏文本层 + 质量门 + provenance
+- [ ] T136 [R1] 接入 `engine_pdf.py` — `invisible_text_layer` 页恢复文本并写入 `PageArtifact.warnings` / `text_layer`；纯扫描页不恢复
+- [ ] T137 [R2] 实现画像质量段 layout 回填 + 路由 override + 档位例外 + L1 输入 — `pipeline/profile/writer.py`、`pipeline/route/routes.py`、`kernel/policies/rule_tier.py`、`pipeline/quality/l1_check.py`
+- [ ] T138 [R3] 实现 `src/dataagent/platform/plugins/adapters/heading_calibration.py` — 按需 `process_pdf` 标题标定 + 失败兜底；接入 `engine_pdf.py`
+- [ ] T139 [R4] 更新黄金集/查看器/评测与文档 — `tests/eval/*`、`docs/ADR/0005-hidden-text-layer.md`、`docs/CHANGELOG.md`、README；全量回归（CI 四件套 + import-linter + grep 门禁）并 commit + push
+
+**Checkpoint**: R1–R4 全部验收 → P0 修订完成 → 回到 Phase 11 集成门禁
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -269,6 +295,7 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 - **B-PLAN（Phase 9）**: 依赖 A2 A8 B8（分支表达式引擎）
 - **B9（Phase 10）**: 依赖 B5
 - **Phase 11（集成门禁）**: 依赖全部 B 模块完成
+- **Phase 12（P0 修订）**: R1 依赖 B3 A5；R2 依赖 R1 B4 B5 A8；R3 依赖 R1；R4 依赖 R1–R3；完成后回到 Phase 11 联测
 
 ### 并行机会
 
@@ -313,7 +340,7 @@ Task: "实现 src/dataagent/pipeline/route/routes.py"
 ## Notes
 
 - [P] 任务 = 不同文件、无依赖
-- [B1]–[B9] / [BPLAN] 标签将任务映射到对应模块（集成收尾阶段无标签）
+- [B1]–[B9] / [BPLAN] 标签将任务映射到对应模块（集成收尾阶段无标签）；[R1]–[R4] 为 Phase 12 P0 修订阶段标签
 - 每个模块独立可测：完成即跑该模块 Independent Test
 - **TDD 铁律**：测试先写、先红后绿，不得先实现后补测试（宪法 G8 NON-NEGOTIABLE）
 - **每模块即推送**：每个 Phase 完成后 commit + push（依赖全局代理 `127.0.0.1:7890`）

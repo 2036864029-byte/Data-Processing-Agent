@@ -35,3 +35,18 @@
     心跳 > 60s、失败分布漂移 > 0.20、`plugin_reason_unknown` > 0.05
   - 资源：批大小 / worker 数 = `min(核数×1.25, 可用内存/50MB, 32)`；OOM 降批 32→16→8
 - **缺陷码**：11 码封闭集，无增减（见 `contracts/defects.py` 与 `contracts/defect-codes.md`）
+
+### P0 修订（2026-11-01，Phase 12）
+
+- **依赖**：新增运行时依赖 `pypdfium2`（PDFium 隐藏文本层探测）；`pdf-inspector==1.25.2` 不变
+- **行为**：
+  - 扫描件先探测隐藏文本层；质量达标（字符数 ≥ 50、`U+FFFD` ≤ 1%、可打印率 ≥ 95%）
+    则复用并标记 `text_layer_recovered`，不送 OCR；不达标才走 OCR
+  - `extract_pages_markdown` 因任一 `U+FFFD` 清空的页（`suspected_garbled_text`）
+    可在恢复后进入 native 路径；纯扫描页仍走 OCR
+  - 病态文档可按需追加一次整本 `process_pdf` 做标题标定；正常文档保持单遍解析
+  - 抽取后回填 PageProfile.layout；恢复页不再因 `pdf_type=image_based` 强制 T3
+- **阈值**：隐藏文本层质量门为 P0 初值，待黄金集标定（research R7）
+- **黄金集**：扫描类拆分 `invisible_text_layer` 与 `pure_scan`；manifest 增加
+  `text_layer` / `text_chars` / `bad_ratio`
+- 详见 ADR-0005、plan.md「P0 修订」、tasks-p0-b.md Phase 12（T130–T139）

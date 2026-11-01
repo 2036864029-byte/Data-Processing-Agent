@@ -39,8 +39,8 @@
 | -- | ---- | ---- | ---- |
 | B1 | 接入 + 文件级体检（11 项、三态、先于解析拦截） | `pipeline/ingest/` | A1 A4 |
 | B2 | 一级格式判定器（自建：magic / 编码 / 分隔符，≤50ms / ≤256KB，三态） | `pipeline/sniff/` | A1 A2 |
-| B3 | 两级路由 + `engine.pdf`（双 capability）+ `engine.csv` / `engine.text` 接入 | `pipeline/route/` `platform/plugins/adapters/` | A2 A5 B1 B2 |
-| B4 | 页面画像两段写入（路由段 + 质量段，`route_reason` 原样保留） | `pipeline/profile/` | A2 B3 |
+| B3 | 两级路由 + `engine.pdf`（双 capability）+ `engine.csv` / `engine.text` 接入；**隐藏文本层探测与复用、按需 `process_pdf` 标题标定** | `pipeline/route/` `platform/plugins/adapters/` | A2 A5 B1 B2 |
+| B4 | 页面画像两段写入（路由段 + 质量段，`route_reason` 原样保留）；**抽取后回填 layout（表格/分栏/旋转/复杂度）** | `pipeline/profile/` | A2 B3 |
 | B5 | L1 全量逐页质检 + L2 分层抽样 + 硬门控 + 性能档位 | `pipeline/quality/` | A2 B4 |
 | B6 | T1 后处理（表格 cell 重建 / 页眉页脚剔除 / 跨页段重排）+ 缺陷码 + 增强回路 + 复杂页收口 + 降级路径 | `pipeline/repair/` | A3 B4 B5 |
 | B7 | 合并（跨页表 / 标题层级 / 文档级校验）+ 分级交付 + 报告分层 + 输出 | `pipeline/merge/` `pipeline/output/` | A4 B5 B6 |
@@ -49,6 +49,25 @@
 | B-PLAN | 任务级执行规划：Plan 解析 / 冻结 / 分支求值（FR-026，3 种 stage kind，禁自由图） | `kernel/plan.py` | A2 A8 B8 |
 
 **验收锚点（M2 / M3）**：7.1 #9–#14、#17、#22–#28、#29；7.2 全部（黄金集标定、STP ≥ 80%、误放率 ≤ 2%、QC 自身达标）。
+
+### P0 修订（2026-11-01）：隐藏文本层复用与 PDF 适配器质量增强
+
+**背景（实测发现，不改变架构）**：
+
+- `detect_pdf` 不填充 `pages_with_tables` / `pages_with_columns` / `is_complex_layout` / `has_encoding_issues`；layout 只能从抽取结果回填；
+- `extract_pages_markdown` 遇任一 `U+FFFD` 整页返回空（`suspected_garbled_text`），并忽略隐藏的不可见文本层（`invisible_text_layer`）；574 页扫描书虽有可复制的 OCR 文本层，仍被判需 OCR；
+- `process_pdf` 具备文档级标题分析（同书 199 个标题 vs extract 105 个），但多页调用无页分隔、`pages` 为 1-indexed；逐页调用会退化为 extract 层级且放大文件打开次数。
+
+**四个修订阶段（tasks-p0-b.md Phase 12，T130–T139）**：
+
+| 阶段 | 内容 | 落点 |
+| ---- | ---- | ---- |
+| R1 | 隐藏文本层探测与恢复（PDFium 逐页读取 + 质量门；可用则复用、不可用才 OCR） | `platform/plugins/adapters/text_layer.py`、`engine_pdf.py` |
+| R2 | 画像/路由/档位接入：layout 回填、恢复页 route=native、`RuleTierPolicy` 例外、L1 输入 | `pipeline/profile/`、`pipeline/route/`、`kernel/policies/rule_tier.py`、`pipeline/quality/` |
+| R3 | 按需 `process_pdf` 标题标定（乱码页/标题异常才触发，失败不阻塞） | `platform/plugins/adapters/heading_calibration.py` |
+| R4 | 黄金集口径拆分（invisible_text_layer / pure_scan）、查看器与评测、ADR/CHANGELOG | `tests/eval/`、`docs/` |
+
+**约束**：五层架构、状态机、调度器、存储抽象、插件契约不变；新增运行时依赖 `pypdfium2`（PDFium 文本层探测）；文本层探测按文档一次读取，不改变文件打开次数预算；所有恢复行为写入产物 `warnings` 与画像 `route_reason`，报告可追溯。
 
 ### P1 增强层（里程碑 M4 起）
 
@@ -62,7 +81,7 @@ DB / API 接入、`engine.ocr` / `engine.image` / `engine.pdfshift` 对照插件
 
 **Language/Version**: Python 3.12（pdf-inspector 仅发布 PyO3 绑定）
 
-**Primary Dependencies**: pdf-inspector（`engine.pdf`，Rust 内核）、pydantic-settings（配置）、json-logic（受限表达式）、SQLAlchemy Core + Alembic（SQL 标准子集 + 迁移）、pytest + hypothesis（测试）、**uv（唯一包管理器，禁 pip / poetry / conda）**；禁止引入 Celery / Kafka / Ray / K8s / 向量库 / ORM / gRPC / LangChain。
+**Primary Dependencies**: pdf-inspector（`engine.pdf`，Rust 内核）、**pypdfium2（PDFium 隐藏文本层探测，B3 修订新增）**、pydantic-settings（配置）、json-logic（受限表达式）、SQLAlchemy Core + Alembic（SQL 标准子集 + 迁移）、pytest + hypothesis（测试）、**uv（唯一包管理器，禁 pip / poetry / conda）**；禁止引入 Celery / Kafka / Ray / K8s / 向量库 / ORM / gRPC / LangChain。
 
 **Storage**: PostgreSQL（状态 / 画像 / 报告 / 缺陷 / 动作，标准 SQL 子集）、Redis Streams（队列，仅最小语义）、MinIO + 本地盘（对象存储双实现，业务经 `platform/store/objectstore/`）。
 
@@ -129,7 +148,7 @@ src/dataagent/
 │   ├── runtime/               #   heartbeat / resources / sandbox（执行设施）
 │   ├── observe/               #   span、指标、日志、审计
 │   ├── rules/                 #   RulePack + json-logic 表达式引擎
-│   └── plugins/               #   loader + adapters/（engine_pdf / engine_csv / engine_text）
+│   └── plugins/               #   loader + adapters/（engine_pdf / engine_csv / engine_text；text_layer / heading_calibration）
 ├── kernel/                    # 内核（依赖=contracts+platform）：
 │   ├── state.py               #   状态机唯一合法转移表
 │   ├── budget.py              #   三层预算
@@ -139,7 +158,7 @@ src/dataagent/
 │   └── policies/              #   Policy 实现：rule_*.py（P0）/ model_*.py（M3，唯一允许 pydantic-ai）
 ├── pipeline/                  # 处理阶段（依赖=contracts+platform+kernel）：
 │   ├── ingest/  sniff/  route/  profile/  extract/
-│   └── quality/  repair/  merge/  output/
+│   └── quality/  repair/（含 layout 修复）  merge/  output/
 └── apps/                      # 进程入口（依赖=全部）：
     ├── cli/                   #   up / status / logs / plugin / doctor / bench
     ├── api/                   #   HTTP 端点 + /status 只读页

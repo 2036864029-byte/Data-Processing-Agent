@@ -92,6 +92,20 @@ PRD V2.3 与宪法已锁定绝大多数技术方向，本文件不重复论证�
 - **Rationale**: 提供结构化输出校验、类型安全、失败重试、调用计量；框架 API 变更风险通过「锁版本 + 仅 3 文件引用 + 失败可回退裸 HTTP（Protocol 不变）」控制（规划 R4）。
 - **Alternatives considered**: 裸 HTTP 调用（保留为回退路径）；LangChain（宪法禁止引入）。
 
+### D12. 扫描件隐藏文本层的探测与复用（P0 修订）
+
+- **Decision**: 扫描件先探测是否存在隐藏 OCR 文本层：用 PDFium（`pypdfium2`）逐页读取文本，按质量门（字符数 ≥ 50、`U+FFFD` 占比 ≤ 1%、可打印率 ≥ 95%）判定；达标则复用文本层（`text_layer=invisible_recovered`、`route=native`、产物 `warnings` 标记），不送 OCR；不达标才置 `needs_ocr` 并进入 T3/聚包。
+- **Rationale**: 实测本语料 574 页扫描书在 pdf-inspector 中只返回图片占位（`[Image: Im0]`），`extract_pages_markdown` / `process_pdf` 均为空、原因 `invisible_text_layer`；但 PDFium 可读出每页 122–1871 字（全书 42 个 `U+FFFD`），WPS 能复制也证明隐藏层存在。直接送 OCR 是 574 页 × 100–300ms 的纯浪费，且违背“先复用已有信息”的降级顺序。
+- **Alternatives considered**: 直接全量 OCR → 拒绝（成本高、隐藏层已可用）；只用 pdf-inspector → 拒绝（它忽略不可见文本，拿不到）；`pypdf` 纯 Python 解析 → 暂不采用（CJK ToUnicode 支持与性能未验证）。PDFium 与 pdf-inspector 同源，行为可解释。
+- **Consequence**: 新增运行时依赖 `pypdfium2`；隐藏层通常只有原始行、无标题层级，需 T1 编号规则重建；质量门阈值需黄金集标定（R7）。
+
+### D13. pdf-inspector API 语义差异与按需标题标定（P0 修订）
+
+- **Decision**: 逐页产物继续用 `extract_pages_markdown`（唯一提供页边界）；仅在“乱码页多 / 标题数异常”时追加一次整本 `process_pdf`，用于文档级标题回填与被抑制页文本恢复；失败标记 `heading_calibration_failed`，不阻塞交付。禁止逐页调用 `process_pdf`。
+- **Rationale**: 实测同一 774 页书：`process_pdf(整本)` 识别 199 个标题，`extract_pages_markdown(整本)` 仅 105 个；32 页批上 process 9/3/10/5 vs extract 7/3/5/4，说明 `process_pdf` 使用文档级样式统计。`process_pdf` 的 `pages` 为 **1-indexed**，多页返回单一拼接 Markdown、**无页分隔**；逐页调用会退化为 extract 层级且放大文件打开次数（PRD 批级预算）。实测耗时（774 页）：extract 整本 3.39s、process 整本 3.39s、text items 2.75s，按需双遍仍远低于端到端 150ms/页。
+- **Alternatives considered**: 逐页 `process_pdf` → 拒绝（标题收益消失、性能差）；`process_pdf` 作为唯一产物来源 → 拒绝（无页边界、全本常驻内存）；接受 extract 的 105 个标题 → 拒绝（层级质量不足）。
+- **Consequence**: 需要“标题行 → 页”的规范化文本匹配（重复标题/跨页标题是风险，进入 R8）；只有病态文档付第二遍成本。
+
 ## 开放研究项（进入实现期）
 
 | # | 研究项 | 目标产出 | 依据 |
@@ -102,6 +116,8 @@ PRD V2.3 与宪法已锁定绝大多数技术方向，本文件不重复论证�
 | R4 | 外部二进制可用性验证（R10） | PDFium / ONNX Runtime / OCR 模型在 Linux（含潜在 ARM）的预编译包与许可证清单 | PRD R10 / 5.4 |
 | R5 | 一级判定阈值标定（真实语料） | 家族阈值表初值 + `extension_mismatch` 观测口径 | PRD 4.2.5 |
 | R6 | 复杂页高发缺陷语料构造 | 表格跨页 / 页眉页脚 / 分栏错序的构造样本（供 T1 与故障注入用） | PRD 4.4.11 / 6.3 |
+| R7 | 隐藏文本层质量阈值标定 | 字符数 / `U+FFFD` / 可打印率阈值与人工“可用”判定的一致率 | PRD 4.3.3 / 4.5.11 |
+| R8 | 标题→页匹配准确率 | 重复标题 / 跨页标题下的匹配错误率；`process_pdf` 触发阈值 | PRD 4.7.1 / 本次实测 |
 
 ## 结论
 
