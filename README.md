@@ -41,7 +41,7 @@ dataagent status
 dataagent logs [-f] [--path PATH]
 dataagent plugin list [--plugin-dir DIR]
 dataagent doctor
-dataagent bench
+dataagent bench --sample <pdf> [--repeats N] [--batch-pages N]
 ```
 
 CLI 是唯一入口，Web 由 CLI 拉起；API 无状态、worker 无状态（任务归属靠队列）。
@@ -74,9 +74,10 @@ uv run python tests/eval/calibrate.py               # 人工标注后标定
 
 ## 已知限制（Phase 11 集成）
 
-- 端到端 task-level runner 尚未接线（B1–B8 组件已就绪，T125 未执行）
-- B-PLAN（T120/T121）未实现；NL→Plan 场景待补
-- `dataagent bench` 仍为骨架；吞吐 / 72h 压测需目标硬件执行
+- B9 人工标注与 `extract_quality` 标定未完成（T122–T124）
+- 吞吐（16C64G 连续 1 小时）与 72h 内存泄漏压测需目标硬件；`dataagent bench`
+  对这两项标记 N/A，不伪造通过
+- L2 抽样未接入端到端编排器（P0 编排按 stage strategy 缩放修复轮次 3/2/1）
 - 详见 `docs/ADR/0006-p0b-implementation-decisions.md`
 
 ## 测试与门禁

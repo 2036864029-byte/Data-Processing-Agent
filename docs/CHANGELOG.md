@@ -53,7 +53,26 @@
   - 隐藏文本层：≥50 字 / `U+FFFD` ≤1% / 可打印 ≥95%；
     标题标定：≥30 文本页无标题触发、标题 ≤80 字且不含多个编号标记
 - **缺陷码**：11 码封闭集，无增减（见 `contracts/defects.py` 与 `contracts/defect-codes.md`）
-- **已知限制**：端到端 runner、B-PLAN、bench 压测尚未完成（见 ADR-0006）
+- **已知限制**：B9 人工标注（T122–T124）、吞吐/72h 目标硬件压测待完成（见 ADR-0006）
+
+### P0-B 集成（2026-11-02，Phase 11）
+
+- **B-PLAN（`kernel/plan.py`）**：
+  - 分支表达式白名单仅统计指标：`stp_rate` / `pages_total` / `pages_processed` /
+    `pages_failed` / `gap_ratio` / `avg_extract_quality` / `elapsed_s` /
+    `model_calls` / `cost_per_page`；未知字段生成期拒绝
+  - guards 默认 `max_model_calls=8` / `max_replans=3` / `max_wall_time_s=3600`
+  - 分支只能向前跳转；分支目标为互斥入口，线性推进时跳过
+  - 同一 Plan 版本 canonical JSON + SHA-256 指纹一致；重规划版本 +1 且可 diff
+- **端到端编排（`pipeline/task_runner.py`）**：
+  - 字符密度按 A4 版心近似面积 468 cm² 计算（P1 由真实 bbox 替换）
+  - 修复轮次随 stage strategy：quality=3 / balanced=2 / fast=1
+  - 缺口页替代原产物进入合并（同页不得同时存在 artifact 与 gap）
+  - 同内容文件在任务内复用结果；rejected / pending / duplicate 均进入任务结果
+- **性能门禁（`dataagent bench --sample <pdf>`）**：
+  - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
+  - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算
+  - OOM 降批链 32→16→8；吞吐 ≥30 万页/日与 72h 泄漏需目标硬件，bench 标记 N/A
 
 ### 可复现性基线（P0-A）
 

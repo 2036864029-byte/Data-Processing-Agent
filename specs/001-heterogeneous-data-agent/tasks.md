@@ -35,12 +35,12 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 **Independent Test**: 全新机器 `uv sync` 一条命令通过；CI 四件套（ruff lint / mypy / pytest / import-linter）全绿；`uv.lock` 存在并随源码提交（G7）；门禁脚本空仓库不误报。
 
-- [ ] T001 创建单一 src-layout 5 层包骨架：`src/dataagent/{contracts,platform,kernel,pipeline,apps}/`（各含 `__init__.py`）、`tests/{unit,integration,e2e,fault,bench}/`、`migrations/`、`deploy/`、`docs/`；根目录 `pyproject.toml`（Python 3.12，项目名 `dataagent`）
-- [ ] T002 [P] 用 uv 添加依赖并锁定：`uv add pydantic pydantic-settings json-logic sqlalchemy alembic pytest hypothesis pytest-cov testcontainers` 及 dev 工具 `ruff mypy import-linter`；`uv lock` 生成 `uv.lock` 随源码提交（G7：禁 pip / poetry / conda，新增依赖一律 `uv add`）
-- [ ] T003 [P] 配置 `pyproject.toml` 工具段：ruff / mypy（`kernel/` `platform/store/` `pipeline/repair/` 严格）/ pytest-cov（核心模块 ≥ 90%、其余 ≥ 80%）/ import-linter `layers` 契约——`layers = ["dataagent.apps", "dataagent.pipeline", "dataagent.kernel", "dataagent.platform", "dataagent.contracts"]`（反向依赖即失败，G9）
-- [ ] T004 [P] 建立 CI 门禁 `.github/workflows/ci.yml`：lint / mypy / pytest / import-linter / `uv lock --check` / 门禁脚本
-- [ ] T005 [P] 建立门禁脚本 `scripts/check-gates.sh`：grep 校验（违反即失败）——页码转换符号（`page_from_plugin`/`page_to_internal`）仅出现在 `src/dataagent/contracts/pages.py`、`apps/worker` 内禁 `asyncio.run`、业务代码禁直接 `redis.xadd`/`boto3.client`、算子禁 IO（`open`/`requests`/db）、`pydantic_ai` 仅 `src/dataagent/kernel/policies/model_*.py`、环境脚本无 `pip install`/`poetry`/`conda`（G9）
-- [ ] T006 建立 TDD 基建：`tests/conftest.py` + 夹具（testcontainers 起 PG / Redis / MinIO 的集成夹具、临时目录 fixture、确定性随机种子）、pytest-cov 分模块阈值配置（宪法「测试分层与目标」：单元行覆盖 ≥ 80%、核心模块 ≥ 90%）
+- [X] T001 创建单一 src-layout 5 层包骨架：`src/dataagent/{contracts,platform,kernel,pipeline,apps}/`（各含 `__init__.py`）、`tests/{unit,integration,e2e,fault,bench}/`、`migrations/`、`deploy/`、`docs/`；根目录 `pyproject.toml`（Python 3.12，项目名 `dataagent`）
+- [X] T002 [P] 用 uv 添加依赖并锁定：`uv add pydantic pydantic-settings json-logic sqlalchemy alembic pytest hypothesis pytest-cov testcontainers` 及 dev 工具 `ruff mypy import-linter`；`uv lock` 生成 `uv.lock` 随源码提交（G7：禁 pip / poetry / conda，新增依赖一律 `uv add`）
+- [X] T003 [P] 配置 `pyproject.toml` 工具段：ruff / mypy（`kernel/` `platform/store/` `pipeline/repair/` 严格）/ pytest-cov（核心模块 ≥ 90%、其余 ≥ 80%）/ import-linter `layers` 契约——`layers = ["dataagent.apps", "dataagent.pipeline", "dataagent.kernel", "dataagent.platform", "dataagent.contracts"]`（反向依赖即失败，G9）
+- [X] T004 [P] 建立 CI 门禁 `.github/workflows/ci.yml`：lint / mypy / pytest / import-linter / `uv lock --check` / 门禁脚本
+- [X] T005 [P] 建立门禁脚本 `scripts/check-gates.sh`：grep 校验（违反即失败）——页码转换符号（`page_from_plugin`/`page_to_internal`）仅出现在 `src/dataagent/contracts/pages.py`、`apps/worker` 内禁 `asyncio.run`、业务代码禁直接 `redis.xadd`/`boto3.client`、算子禁 IO（`open`/`requests`/db）、`pydantic_ai` 仅 `src/dataagent/kernel/policies/model_*.py`、环境脚本无 `pip install`/`poetry`/`conda`（G9）
+- [X] T006 建立 TDD 基建：`tests/conftest.py` + 夹具（testcontainers 起 PG / Redis / MinIO 的集成夹具、临时目录 fixture、确定性随机种子）、pytest-cov 分模块阈值配置（宪法「测试分层与目标」：单元行覆盖 ≥ 80%、核心模块 ≥ 90%）
 
 **Checkpoint**: `uv sync` + CI 四件套全绿 → `git add . && git commit && git push`（每模块即推送约定）
 

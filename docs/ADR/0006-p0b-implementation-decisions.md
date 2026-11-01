@@ -82,8 +82,15 @@ P0-B 在 A1–A9 基础层之上落地接入、格式判定、路由、画像、
 ## 后果与已知限制
 
 - 六个必写测试全部落地（T126）；全量测试与工程门禁保持全绿。
-- **端到端编排尚未接线**：B1–B8 组件就绪，但 task-level runner 未实现，
-  T125 的 100 文件端到端验证暂不能执行。
-- **B-PLAN（T120/T121）未实现**：Phase 11 的 NL→Plan 场景暂不能验证。
-- `dataagent bench` 仍为骨架；T127 的吞吐/72h 压测需在目标硬件上执行。
-- 以上限制不影响单模块正确性与回归测试，但 P0 全量交付需补齐后再关闭 T125/T127/T129。
+- **端到端编排已接线**（2026-11-02）：`pipeline/task_runner.py` 串联
+  ingest→sniff→route→extract→profile→L1→repair→merge→delivery→report/output，
+  worker 通过 `TaskRunnerBatchHandler` 按批调用；`scripts/e2e_p0.py` 100 份混合语料
+  S1–S4 + S6 共 17 项断言全部通过。缺口页以占位替代原产物（不得同页并存）。
+- **B-PLAN 已实现**（T120/T121）：`kernel/plan.py` 解析即冻结；分支只能前向跳转，
+  分支目标是互斥入口（线性推进时跳过）；统计指标白名单在生成期拒绝未知字段。
+- **bench 已实现**（T127）：单页 p50/p95、Python 堆峰值、文件打开预算、
+  批大小 / worker 公式、OOM 降批链均有真实输出；本机实测 p50 9.6ms / p95 17.7ms。
+- **仍然待办**：
+  - B9 人工标注与标定（T122–T124）；
+  - 吞吐（16C64G 连续 1 小时）与 72h 内存泄漏压测需目标硬件，bench 中标记 N/A；
+  - L2 抽样未接入编排器（P0 编排按 stage strategy 缩放修复轮次 3/2/1）。
