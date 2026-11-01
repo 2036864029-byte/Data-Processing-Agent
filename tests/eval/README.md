@@ -33,6 +33,8 @@
 - `needs_manual`：这页是否需要人工介入（是/否），用于 `extract_quality` 标定；
 - `label_source`：人工填 `human`；自动扩展标签填 `auto`，并在报告中只用人面子集验收；
 - 参照物是原始 PDF 页面与系统产物并排对照，不是另一次解析结果。
+- 空产物页会带状态：`needs_ocr`（无文本层，需 OCR，空属预期）或
+  `suspected_garbled`（引擎判疑似乱码未出 Markdown，查看器回退展示原生文本项）。
 
 ## 输出
 
@@ -40,6 +42,7 @@
 | --- | --- |
 | `manifest.json` / `manifest.csv` | 200 页抽样清单（含类别/来源/页码） |
 | `manifest_summary.json` | 六类可用量、选中量、构造补齐量、缺口 |
+| `manifest.csv` 的 `table_rows/cols/cells` | 表格尺寸（短表/伪表格不进入表格类；构造样本含 36×6 与 61×6 长表） |
 | `annotations.csv` | 全量标注模板（已存在则不覆盖） |
 | `human_sheet.csv` | 60 页人工打分子集 |
 | `metrics.csv` | 每页代理指标（标定输入） |

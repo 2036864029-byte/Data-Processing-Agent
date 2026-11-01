@@ -107,23 +107,37 @@ def _text_page(lines: list[str]) -> PageSpec:
     )
 
 
+def _long_rows(count: int) -> tuple[tuple[str, ...], ...]:
+    return tuple(
+        (
+            f"Item {index:02d}",
+            str(index % 9 + 1),
+            f"{index * 1.5:.2f}",
+            f"{index * 2.0:.2f}",
+            f"{index * 0.10:.2f}",
+            f"{index * 2.1:.2f}",
+        )
+        for index in range(1, count + 1)
+    )
+
+
+HEADER = ("Item", "Qty", "Unit Price", "Amount", "Tax", "Total")
+
+
 def _single_table() -> tuple[list[PageSpec], dict[str, Any]]:
+    rows = _long_rows(35)
     table = TableSpec(
-        x=72,
-        y=560,
-        columns=("Item", "Qty", "Amount"),
-        rows=(("Widget", "2", "20.00"), ("Gadget", "1", "15.50"), ("Bolt", "10", "5.00")),
+        x=56, y=160, columns=HEADER, rows=rows, cell_w=80, cell_h=14
     )
     page = PageSpec(
-        lines=[(72.0, 720.0, 10, "Purchase order summary")],
-        table=table,
+        lines=[(56.0, 750.0, 10, "Purchase order summary")], table=table
     )
     truth = {
         "pages": [
             {
                 "page_no": 1,
                 "text_lines": ["Purchase order summary"],
-                "table": {"header": list(table.columns), "rows": [list(r) for r in table.rows]},
+                "table": {"header": list(HEADER), "rows": [list(r) for r in rows]},
             }
         ],
         "reading_order": ["Purchase order summary"],
@@ -132,31 +146,29 @@ def _single_table() -> tuple[list[PageSpec], dict[str, Any]]:
 
 
 def _cross_page_table() -> tuple[list[PageSpec], dict[str, Any]]:
-    header = ("Item", "Qty", "Amount")
-    page1_rows = (("Widget", "2", "20.00"), ("Gadget", "1", "15.50"), ("Bolt", "10", "5.00"))
-    page2_rows = (("Nut", "4", "8.00"), ("Washer", "6", "3.60"))
-    pages = [
-        PageSpec(
-            lines=[(72.0, 720.0, 10, "Purchase order summary")],
-            table=TableSpec(x=72, y=560, columns=header, rows=page1_rows),
-        ),
-        PageSpec(
-            lines=[(72.0, 720.0, 10, "Purchase order summary continued")],
-            table=TableSpec(x=72, y=640, columns=header, rows=page2_rows),
-        ),
-    ]
+    all_rows = _long_rows(60)
+    pages: list[PageSpec] = []
+    for page_index in range(3):
+        chunk = all_rows[page_index * 20 : (page_index + 1) * 20]
+        pages.append(
+            PageSpec(
+                lines=[(56.0, 750.0, 10, f"Purchase order summary page {page_index + 1}")],
+                table=TableSpec(
+                    x=56, y=430, columns=HEADER, rows=chunk, cell_w=80, cell_h=14
+                ),
+            )
+        )
     truth = {
         "pages": [
-            {"page_no": 1, "text_lines": ["Purchase order summary"], "table": None},
-            {"page_no": 2, "text_lines": ["Purchase order summary continued"], "table": None},
-        ],
-        "tables": [
             {
-                "header": list(header),
-                "rows": [list(row) for row in (*page1_rows, *page2_rows)],
+                "page_no": index + 1,
+                "text_lines": [f"Purchase order summary page {index + 1}"],
+                "table": None,
             }
+            for index in range(3)
         ],
-        "reading_order": ["Purchase order summary", "Purchase order summary continued"],
+        "tables": [{"header": list(HEADER), "rows": [list(r) for r in all_rows]}],
+        "reading_order": [f"Purchase order summary page {index + 1}" for index in range(3)],
     }
     return pages, truth
 
@@ -196,6 +208,20 @@ def _text_only(index: int) -> tuple[list[PageSpec], dict[str, Any]]:
     return [_text_page(lines)], truth
 
 
+def _truth_table_rows(truth: dict[str, Any]) -> int:
+    tables = truth.get("tables") or [truth["pages"][0].get("table") or {}]
+    return sum(len(table.get("rows", [])) + (1 if table.get("header") else 0) for table in tables)
+
+
+def _truth_table_cols(truth: dict[str, Any]) -> int:
+    tables = truth.get("tables") or [truth["pages"][0].get("table") or {}]
+    return max((len(table.get("header", [])) for table in tables), default=0)
+
+
+def _truth_table_cells(truth: dict[str, Any]) -> int:
+    return _truth_table_rows(truth) * _truth_table_cols(truth)
+
+
 def generate(root: Path = GOLDEN_ROOT) -> list[dict[str, Any]]:
     output = root / "constructed"
     output.mkdir(parents=True, exist_ok=True)
@@ -208,7 +234,7 @@ def generate(root: Path = GOLDEN_ROOT) -> list[dict[str, Any]]:
     }
     counter = 0
     for category, builder in builders.items():
-        for index in range(1, 31):
+        for index in range(1, 41):
             pages, truth = builder(index)
             sample_id = f"C-{counter:04d}"
             counter += 1
@@ -237,6 +263,10 @@ def generate(root: Path = GOLDEN_ROOT) -> list[dict[str, Any]]:
                     "has_column": str(category == "multi_column").lower(),
                     "needs_ocr": "false",
                     "encoding_bad": "false",
+                    "table_rows": str(_truth_table_rows(truth)),
+                    "table_cols": str(_truth_table_cols(truth)),
+                    "table_cells": str(_truth_table_cells(truth)),
+                    "ocr_reason": "",
                     "truth_path": str(truth_path),
                 }
             )

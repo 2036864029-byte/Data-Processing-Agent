@@ -42,6 +42,7 @@ class PageSignals:
     needs_ocr: bool = False
     encoding_bad: bool = False
     cross_page_table: bool = False
+    ocr_reason: str | None = None
 
 
 def classify_page(signals: PageSignals) -> str:
@@ -76,6 +77,7 @@ def mark_cross_page_tables(pages: Mapping[int, PageSignals]) -> dict[int, PageSi
             needs_ocr=signals.needs_ocr,
             encoding_bad=signals.encoding_bad,
             cross_page_table=cross and not continuation,
+            ocr_reason=signals.ocr_reason,
         )
     return marked
 
