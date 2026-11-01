@@ -128,15 +128,15 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T031 [A5] manifest schema 校验测试 `tests/unit/contracts/test_plugin.py` — 合法 engine.pdf manifest（plugin-manifest.md 示例）通过；缺 `determinism`、`trust: unsigned` 但 `sandbox: none` 拒绝（验收 1–5）；`provides` 命名 `域.动作`、`*.classify` 与 `*.extract` 不交叉
-- [ ] T032 [A5] 注册表行为测试 `tests/unit/kernel/test_registry.py` — 能力索引 / 启停 / 版本锁定 / 依赖兼容校验 / 同能力多实现显式优先级 / 后加载覆盖被拒（G3）；`determinism` 缺失或 `stochastic / model` 禁启用结果缓存
+- [X] T031 [A5] manifest schema 校验测试 `tests/unit/contracts/test_plugin.py` — 合法 engine.pdf manifest（plugin-manifest.md 示例）通过；缺 `determinism`、`trust: unsigned` 但 `sandbox: none` 拒绝（验收 1–5）；`provides` 命名 `域.动作`、`*.classify` 与 `*.extract` 不交叉
+- [X] T032 [A5] 注册表行为测试 `tests/unit/kernel/test_registry.py` — 能力索引 / 启停 / 版本锁定 / 依赖兼容校验 / 同能力多实现显式优先级 / 后加载覆盖被拒（G3）；`determinism` 缺失或 `stochastic / model` 禁启用结果缓存
 
 ### 实现 A5
 
-- [ ] T033 [A5] 实现 `src/dataagent/contracts/plugin.py` — 插件 Protocol + manifest schema（api_version 校验、provides 能力签名、`determinism` / `trust` / `sandbox` / `batching` / `compatibility`，逐字引用 plugin-manifest.md）
-- [ ] T034 [P] [A5] 实现 `src/dataagent/platform/plugins/loader.py` — 从插件目录读 manifest 加载；热路径插件同进程直接调用；冷路径子进程沙箱（调用 sandbox.py）
-- [ ] T035 [A5] 实现 `src/dataagent/platform/runtime/sandbox.py` — 冷路径子进程沙箱执行设施（超时 / 资源上限 / 隔离）※ 归 A5（加载器冷路径需要），A6 续用
-- [ ] T036 [A5] 实现 `src/dataagent/kernel/registry.py` — 插件注册表：能力索引（capability→plugin）、启停、版本锁定、依赖 / 兼容性校验、显式优先级、禁后加载覆盖、禁插件间互调（必须经调度器）
+- [X] T033 [A5] 实现 `src/dataagent/contracts/plugin.py` — 插件 Protocol + manifest schema（api_version 校验、provides 能力签名、`determinism` / `trust` / `sandbox` / `batching` / `compatibility`，逐字引用 plugin-manifest.md）
+- [X] T034 [P] [A5] 实现 `src/dataagent/platform/plugins/loader.py` — 从插件目录读 manifest 加载；热路径插件同进程直接调用；冷路径子进程沙箱（调用 sandbox.py）
+- [X] T035 [A5] 实现 `src/dataagent/platform/runtime/sandbox.py` — 冷路径子进程沙箱执行设施（超时 / 资源上限 / 隔离）※ 归 A5（加载器冷路径需要），A6 续用
+- [X] T036 [A5] 实现 `src/dataagent/kernel/registry.py` — 插件注册表：能力索引（capability→plugin）、启停、版本锁定、依赖 / 兼容性校验、显式优先级、禁后加载覆盖、禁插件间互调（必须经调度器）
 
 **Checkpoint**: 注册 / 索引 / 优先级行为全绿 → commit + push
 
