@@ -12,12 +12,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 from dataagent.contracts.messages import PageReport, ParseRequest, Verdict
 from dataagent.kernel.state import Event, State, transition
+from dataagent.platform.observe.alerts import Alert, AlertEvaluator, AlertSink
 
 DEFAULT_BATCH_PAGES = 32
 
@@ -113,10 +114,24 @@ class Supervisor:
         executor: BatchExecutor,
         artifacts: ArtifactWriter,
         repository: ProgressRepository,
+        alerts: AlertEvaluator | None = None,
+        alert_sink: AlertSink | None = None,
     ) -> None:
         self._executor = executor
         self._artifacts = artifacts
         self._repository = repository
+        self._alerts = alerts
+        self._alert_sink = alert_sink
+
+    def evaluate_alerts(self, stats: Mapping[str, float | int]) -> tuple[Alert, ...]:
+        """告警触发点：批结束 / 任务报告生成时传入统计快照（FR-025）。"""
+        if self._alerts is None:
+            return ()
+        alerts = self._alerts.evaluate(stats)
+        if self._alert_sink is not None:
+            for alert in alerts:
+                self._alert_sink.emit(alert)
+        return alerts
 
     def advance(self, task_id: str, event: Event) -> State:
         """沿唯一转移表推进并落库；非法转移抛 InvalidTransitionError。"""

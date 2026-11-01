@@ -223,15 +223,15 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T062 [A9] 观测基础测试 `tests/unit/platform/observe/test_observe.py` — 结构化日志 + span 上下文；FR-025 指标清单（处理量 / STP 率 / 误放率 / 单页成本 / 档位分布 / 后处理命中率 / 时延 / 复杂页占比）逐项断言采集点与口径
-- [ ] T063 [A9] 告警测试 `tests/unit/platform/observe/test_alerts.py` — 异常触发（STP 跌破阈值 / 换引擎占比异常上涨 / 队列积压 / 节点离线 / 失败分布漂移 / `plugin_reason_unknown` 占比 > 5%）；告警为旁路、不阻塞主链路
+- [X] T062 [A9] 观测基础测试 `tests/unit/platform/observe/test_observe.py` — 结构化日志 + span 上下文；FR-025 指标清单（处理量 / STP 率 / 误放率 / 单页成本 / 档位分布 / 后处理命中率 / 时延 / 复杂页占比）逐项断言采集点与口径
+- [X] T063 [A9] 告警测试 `tests/unit/platform/observe/test_alerts.py` — 异常触发（STP 跌破阈值 / 换引擎占比异常上涨 / 队列积压 / 节点离线 / 失败分布漂移 / `plugin_reason_unknown` 占比 > 5%）；告警为旁路、不阻塞主链路
 
 ### 实现 A9
 
-- [ ] T064 [P] [A9] 实现 `src/dataagent/platform/observe/log.py` — 结构化日志 + span 上下文
-- [ ] T065 [P] [A9] 实现 `src/dataagent/platform/observe/metrics.py` — 指标采集（口径定义 + 落库 / 暴露）
-- [ ] T066 [A9] 实现 `src/dataagent/platform/observe/audit.py` — 操作留痕（接入 / 配置 / 规则变更 / 人工修正全部可追溯，FR-025）
-- [ ] T067 [A9] 实现告警规则与触发点 — 接入 supervisor 与报告生成处；`plugin_reason_unknown` 计数联动 B6（占比 > 5% 告警，US4 #3）
+- [X] T064 [P] [A9] 实现 `src/dataagent/platform/observe/log.py` — 结构化日志 + span 上下文
+- [X] T065 [P] [A9] 实现 `src/dataagent/platform/observe/metrics.py` — 指标采集（口径定义 + 落库 / 暴露）
+- [X] T066 [A9] 实现 `src/dataagent/platform/observe/audit.py` — 操作留痕（接入 / 配置 / 规则变更 / 人工修正全部可追溯，FR-025）
+- [X] T067 [A9] 实现告警规则与触发点 — 接入 supervisor 与报告生成处；`plugin_reason_unknown` 计数联动 B6（占比 > 5% 告警，US4 #3）
 
 **Checkpoint**: 观测 / 告警测试全绿 → commit + push
 
