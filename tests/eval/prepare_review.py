@@ -154,9 +154,11 @@ def _card(entry: dict[str, Any]) -> str:
   </div>
   <div class="scores">
     <label>文本还原 <select data-dim="dim_text">{_options()}</select></label>
-    <label>结构还原 <select data-dim="dim_structure">{_options()}</select></label>
+    <label>结构还原 <select data-dim="dim_structure">{_options()}</select>
+      <span class="muted">层级/段落/列表/表格行列/顺序</span></label>
     <label>语义还原 <select data-dim="dim_semantic">{_options()}</select></label>
-    <label>版式还原 <select data-dim="dim_layout">{_options()}</select></label>
+    <label>版式还原 <select data-dim="dim_layout">{_options()}</select>
+      <span class="muted">块位置/分栏/bbox</span></label>
     <label class="manual"><input type="checkbox" data-dim="needs_manual"> 需要人工介入</label>
     <input class="notes" data-dim="error_notes" placeholder="问题备注（可选）">
   </div>
@@ -185,6 +187,12 @@ _TEMPLATE = """<!doctype html>
   button { padding: 6px 14px; border: 1px solid #2f6fed; background: #2f6fed; color: #fff;
            border-radius: 4px; cursor: pointer; }
   .hint { padding: 10px 16px; color: #444; background: #eef3ff; border-bottom: 1px solid #dbe6ff; }
+  .rubric { margin: 12px 16px; padding: 10px 14px; background: #fff;
+            border: 1px solid #ddd; border-radius: 6px; }
+  .rubric summary { cursor: pointer; font-weight: 600; }
+  .rubric p { font-size: 13px; color: #333; margin: 6px 0; }
+  .rubric table { border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+  .rubric td, .rubric th { border: 1px solid #ddd; padding: 4px 8px; vertical-align: top; }
   .card { background: #fff; border: 1px solid #ddd; border-radius: 6px; margin: 16px;
           padding: 12px; }
   .card header { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; }
@@ -218,6 +226,23 @@ _TEMPLATE = """<!doctype html>
   <code>var/golden/annotations_filled.csv</code>，
   然后运行 <code>python tests/eval/import_annotations.py</code>。
 </div>
+<details class="rubric">
+  <summary>评分标准（点击展开）：四维边界与 0–3 锚点</summary>
+  <p><b>结构还原看逻辑</b>：阅读顺序、标题层级、段落/列表边界、表格行列结构。<br>
+     <b>版式还原看位置</b>：文本块/表格在页面上的位置与分栏对应（bbox/列结构）。<br>
+     “段落/列表边界丢了”属于结构扣分；“块位置/分栏错了”属于版式扣分。</p>
+  <table>
+    <tr><th>分</th><th>结构还原</th><th>版式还原</th></tr>
+    <tr><td>3</td><td>层级/段落/列表/表格行列与顺序全对</td><td>块位置/分栏与页面一致</td></tr>
+    <tr><td>2</td><td>少量段落合并，层级仍可辨认</td><td>轻微位置差异，顺序正确</td></tr>
+    <tr><td>1</td><td>大量段落/列表边界丢失或标题平铺</td><td>明显错位或分栏被破坏</td></tr>
+    <tr><td>0</td><td>阅读顺序错乱或表格结构不可用</td><td>无法把输出块对应到页面位置</td></tr>
+  </table>
+  <p>文本还原看字符完整性（错字/漏字/乱码）；语义还原看关键字段（金额/日期/编号/名称）。</p>
+  <p>示例：文字全对、顺序对、只是（一）（二）被合并成一段 → 文本 3 / 结构 1–2 / 语义 3 / 版式 2–3；
+     双栏交错或整页落入表格单元格 → 结构 1 / 版式 1。</p>
+  <p><b>需要人工介入</b>：结构 ≤1，或关键字段因边界丢失无法可靠定位时勾“是”。</p>
+</details>
 __CARDS__
 <script>
 const KEY = "dataagent_golden_scores_v1";
