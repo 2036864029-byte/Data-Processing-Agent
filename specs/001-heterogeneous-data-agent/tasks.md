@@ -243,11 +243,11 @@ description: "P0-A 基础支撑层任务清单（A1–A9 + 集成门禁，对应
 
 **Independent Test**: P0-A 全部单测 + 集成全绿；`dataagent doctor / up` + `/status` + `plugin list` + 故障注入续跑演示全过（验收锚点 M1 中注册表 / CLI 唯一入口 / 续跑）。
 
-- [ ] T068 跑 P0-A 集成验证（quickstart 子集）：空库 `docker compose up -d` → `dataagent doctor` → `dataagent up` → `/status` 渲染 → `plugin list` → kill -9 worker 续跑演示（对应验收锚点 M1：注册表、CLI 唯一入口、续跑）
-- [ ] T069 回归必写测试盘点：**#1 页码基准（A3 已覆盖）、#5 主键内容哈希 / 幂等键（A2/A4 已覆盖）** 在 P0-A 全绿；#2 未知原因透传、#3 算子幂等、#4 无进展停机、#6 回路收敛的 P0-B 全量盘点见 `tasks-p0-b.md` T126（单向引用，避免两处维护）
-- [ ] T070 [P] 初始化 `docs/CHANGELOG.md`（三类可复现性变更记录框架：插件版本 pin / 阈值 / 缺陷码增减，宪法「复现性承诺」）+ README 快速开始（uv sync + compose + doctor + up）
-- [ ] T071 [P] ADR 记录：`docs/ADR/` 记录 P0-A 关键实现决策（sandbox 归 A5、`pages.py` 转换符号命名、A9 可观测模块、P0-A 单文件任务拆分口径）
-- [ ] T072 全量回归 + 收尾：CI 四件套 + import-linter + 全部 grep 门禁一次跑绿；最终 commit + push
+- [X] T068 跑 P0-A 集成验证（quickstart 子集）：空库 `docker compose up -d` → `dataagent doctor` → `dataagent up` → `/status` 渲染 → `plugin list` → kill -9 worker 续跑演示（对应验收锚点 M1：注册表、CLI 唯一入口、续跑）
+- [X] T069 回归必写测试盘点：**#1 页码基准（A3 已覆盖）、#5 主键内容哈希 / 幂等键（A2/A4 已覆盖）** 在 P0-A 全绿；#2 未知原因透传、#3 算子幂等、#4 无进展停机、#6 回路收敛的 P0-B 全量盘点见 `tasks-p0-b.md` T126（单向引用，避免两处维护）
+- [X] T070 [P] 初始化 `docs/CHANGELOG.md`（三类可复现性变更记录框架：插件版本 pin / 阈值 / 缺陷码增减，宪法「复现性承诺」）+ README 快速开始（uv sync + compose + doctor + up）
+- [X] T071 [P] ADR 记录：`docs/ADR/` 记录 P0-A 关键实现决策（sandbox 归 A5、`pages.py` 转换符号命名、A9 可观测模块、P0-A 单文件任务拆分口径）
+- [X] T072 全量回归 + 收尾：CI 四件套 + import-linter + 全部 grep 门禁一次跑绿；最终 commit + push
 
 **Checkpoint**: 集成门禁全绿 → **解锁 P0-B**（B1–B9 任务已分解于 `tasks-p0-b.md`，可开始实现）
 
