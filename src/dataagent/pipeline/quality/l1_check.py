@@ -25,6 +25,7 @@ GLYPH_COVERAGE_MIN: Final[float] = 0.95
 CID_UNMAPPED_RATIO_MAX: Final[float] = 0.01
 EMPTY_REGION_RATIO_MAX: Final[float] = 0.30
 TABLE_CELL_FILL_MIN: Final[float] = 0.90
+ROW_COL_VARIANCE_MAX: Final[float] = 1.0
 READING_ORDER_SCORE_MIN: Final[float] = 0.88
 HEADER_FOOTER_LEAK_MAX: Final[float] = 0.05
 
@@ -67,7 +68,9 @@ class L1Metrics:
     cid_unmapped_ratio: float | None = None
     empty_region_ratio: float | None = None
     table_cell_fill: float | None = None
+    # 契约口径：每行列数方差（越小越好）
     row_col_consistency: float | None = None
+    table_header_ok: bool | None = None
     reading_order_score: float | None = None
     bbox_coverage: float | None = None
     header_footer_leak: float | None = None
@@ -174,21 +177,38 @@ class L1Checker:
                 )
             )
 
-        if (
-            page.has_table
-            and metrics.table_cell_fill is not None
-            and metrics.table_cell_fill < TABLE_CELL_FILL_MIN
-        ):
-            defects.append(
-                self._defect(
-                    DefectCode.TABLE_STRUCTURE_BROKEN,
-                    page,
-                    {"table_cell_fill": metrics.table_cell_fill},
-                    (TABLE_CELL_FILL_MIN - metrics.table_cell_fill)
-                    / TABLE_CELL_FILL_MIN,
-                    table=True,
+        if page.has_table:
+            fill = metrics.table_cell_fill
+            variance = metrics.row_col_consistency
+            fill_bad = fill is not None and fill < TABLE_CELL_FILL_MIN
+            variance_bad = variance is not None and variance > ROW_COL_VARIANCE_MAX
+            header_bad = metrics.table_header_ok is False
+            if fill_bad or variance_bad or header_bad:
+                severity = 0.0
+                if fill is not None:
+                    severity = max(
+                        severity, (TABLE_CELL_FILL_MIN - fill) / TABLE_CELL_FILL_MIN
+                    )
+                if variance is not None:
+                    severity = max(
+                        severity,
+                        min(variance / (ROW_COL_VARIANCE_MAX * 4.0), 1.0),
+                    )
+                if header_bad:
+                    severity = max(severity, 0.5)
+                defects.append(
+                    self._defect(
+                        DefectCode.TABLE_STRUCTURE_BROKEN,
+                        page,
+                        {
+                            "table_cell_fill": fill,
+                            "row_col_variance": variance,
+                            "table_header_ok": "false" if header_bad else None,
+                        },
+                        severity,
+                        table=True,
+                    )
                 )
-            )
 
         if (
             metrics.reading_order_score is not None

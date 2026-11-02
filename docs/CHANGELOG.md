@@ -69,6 +69,10 @@
   - 修复轮次随 stage strategy：quality=3 / balanced=2 / fast=1
   - 缺口页替代原产物进入合并（同页不得同时存在 artifact 与 gap）
   - 同内容文件在任务内复用结果；rejected / pending / duplicate 均进入任务结果
+  - 表格指标接入 L1：从产物 Markdown 解析管道表，计算 `table_cell_fill`
+    （非空 / 最大列数×行数）、`row_col_consistency`（每行列数方差）、
+    `table_header_ok`；填充率 <0.90、列方差 >1.0 或表头缺失 →
+    `table_structure_broken`（缺口页进人工复核）
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算

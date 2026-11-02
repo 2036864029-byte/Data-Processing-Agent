@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -80,6 +80,7 @@ from dataagent.pipeline.quality.l1_check import (
     defects_for_repair,
 )
 from dataagent.pipeline.quality.l2_sample import ProfileSpeed
+from dataagent.pipeline.quality.table_metrics import table_page_metrics
 from dataagent.pipeline.repair.fallback import (
     EnhancerKind,
     FallbackConfig,
@@ -608,7 +609,9 @@ class TaskRunner:
             candidate_input = L1PageInput(
                 doc_id=page_input.doc_id,
                 page_no=page_input.page_no,
-                metrics=self._metrics_from(candidate.markdown),
+                metrics=self._metrics_for(
+                    candidate.markdown, has_table=page_input.has_table
+                ),
                 pdf_type=page_input.pdf_type,
                 has_table=page_input.has_table,
                 rotation=page_input.rotation,
@@ -632,7 +635,9 @@ class TaskRunner:
         final_input = L1PageInput(
             doc_id=page_input.doc_id,
             page_no=page_input.page_no,
-            metrics=self._metrics_from(outcome.artifact.markdown),
+            metrics=self._metrics_for(
+                outcome.artifact.markdown, has_table=page_input.has_table
+            ),
             pdf_type=page_input.pdf_type,
             has_table=page_input.has_table,
             rotation=page_input.rotation,
@@ -712,16 +717,30 @@ class TaskRunner:
             ).pdf_type
         except KeyError:
             pdf_type = PdfType.TEXT_BASED
+        has_table = artifact.page_no in extraction.pages_with_tables
         return L1PageInput(
             doc_id=artifact.doc_id,
             page_no=artifact.page_no,
-            metrics=self._metrics_from(artifact.markdown),
+            metrics=self._metrics_for(artifact.markdown, has_table=has_table),
             pdf_type=pdf_type,
-            has_table=artifact.page_no in extraction.pages_with_tables,
+            has_table=has_table,
         )
 
-    def _metrics_from(self, markdown: str) -> L1Metrics:
-        return L1Metrics.from_text(markdown, text_area=self._config.text_area_cm2)
+    def _metrics_for(self, markdown: str, *, has_table: bool) -> L1Metrics:
+        metrics = L1Metrics.from_text(
+            markdown, text_area=self._config.text_area_cm2
+        )
+        if not has_table:
+            return metrics
+        table = table_page_metrics(markdown)
+        if table is None:
+            return metrics
+        return replace(
+            metrics,
+            table_cell_fill=table.cell_fill,
+            row_col_consistency=table.column_variance,
+            table_header_ok=table.header_ok,
+        )
 
     # ── Phase D：合并 / 交付 / 输出 / 报告 ─────────────────────────────
 
