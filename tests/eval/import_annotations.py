@@ -43,6 +43,8 @@ def merge(
             target["dim_semantic"],
             target["dim_layout"],
         ) = dims
+        dim_table = row.get("dim_table", "").strip()
+        target["dim_table"] = dim_table if dim_table in {"0", "1", "2", "3"} else ""
         target["total"] = str(sum(int(value) for value in dims))
         target["needs_manual"] = _normalize_bool(row.get("needs_manual", ""))
         target["error_notes"] = row.get("error_notes", "")

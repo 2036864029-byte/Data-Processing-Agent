@@ -157,6 +157,13 @@ def _card(entry: dict[str, Any]) -> str:
             f'（{entry["table_cells"]} cell）</span>'
         )
     banner_html = f'<div class="banner">{banner}</div>' if banner else ""
+    table_score = ""
+    if entry["category"] in {"single_table", "cross_page_table"}:
+        table_score = (
+            '<label>表格专项 <select data-dim="dim_table">'
+            f"{_options()}</select>"
+            '<span class="muted">仅表格页；不计入总分</span></label>'
+        )
     return f"""
 <section class="card" data-sample="{sample_id}" data-category="{category}">
   <header>
@@ -177,6 +184,7 @@ def _card(entry: dict[str, Any]) -> str:
     <label>语义还原 <select data-dim="dim_semantic">{_options()}</select></label>
     <label>版式还原 <select data-dim="dim_layout">{_options()}</select>
       <span class="muted">块位置/分栏/bbox</span></label>
+    {table_score}
     <label class="manual"><input type="checkbox" data-dim="needs_manual"> 需要人工介入</label>
     <input class="notes" data-dim="error_notes" placeholder="问题备注（可选）">
   </div>
@@ -261,6 +269,8 @@ _TEMPLATE = """<!doctype html>
   <p>示例：文字全对、顺序对、只是（一）（二）被合并成一段 → 文本 3 / 结构 1–2 / 语义 3 / 版式 2–3；
      双栏交错或整页落入表格单元格 → 结构 1 / 版式 1。</p>
   <p><b>需要人工介入</b>：结构 ≤1，或关键字段因边界丢失无法可靠定位时勾“是”。</p>
+  <p><b>表格专项（仅表格页）</b>：只评“这张表本身”——表头/列对齐/合并单元格/单元格内容完整性。
+    它<b>不计入总分</b>；表格问题仍照常计入结构（行列与顺序）与版式（块位置/合并/分栏）。</p>
 </details>
 __CARDS__
 <script>
@@ -305,13 +315,14 @@ function csvEscape(value) {
 }
 document.getElementById("export").addEventListener("click", () => {
   const header = ["sample_id","dim_text","dim_structure","dim_semantic","dim_layout",
-                  "needs_manual","error_notes","annotator","date","label_source"];
+                  "dim_table","needs_manual","error_notes","annotator","date","label_source"];
   const lines = [header.join(",")];
   cards.forEach(card => {
     const e = state[card.dataset.sample] || {};
     lines.push([
       card.dataset.sample, e.dim_text ?? "", e.dim_structure ?? "",
-      e.dim_semantic ?? "", e.dim_layout ?? "", e.needs_manual ? "是" : "否",
+      e.dim_semantic ?? "", e.dim_layout ?? "", e.dim_table ?? "",
+      e.needs_manual ? "是" : "否",
       e.error_notes ?? "", "", "", "human",
     ].map(csvEscape).join(","));
   });

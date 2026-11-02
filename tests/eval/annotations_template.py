@@ -29,6 +29,7 @@ ANNOTATION_FIELDS = (
     "dim_structure",
     "dim_semantic",
     "dim_layout",
+    "dim_table",
     "total",
     "needs_manual",
     "error_notes",

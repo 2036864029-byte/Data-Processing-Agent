@@ -162,13 +162,14 @@ def test_annotation_import_merges_scores(tmp_path) -> None:
                 "dim_structure": "2",
                 "dim_semantic": "3",
                 "dim_layout": "2",
+                "dim_table": "1",
                 "needs_manual": "否",
                 "error_notes": "",
                 "label_source": "human",
             }
         ],
         ("sample_id", "dim_text", "dim_structure", "dim_semantic", "dim_layout",
-         "needs_manual", "error_notes", "label_source"),
+         "dim_table", "needs_manual", "error_notes", "label_source"),
     )
 
     result = merge(filled, annotations)
@@ -176,5 +177,6 @@ def test_annotation_import_merges_scores(tmp_path) -> None:
     row = read_csv(annotations)[0]
     assert result == {"merged": 1, "skipped": 0, "total": 1}
     assert row["label_source"] == "human"
-    assert row["total"] == "10"
+    assert row["total"] == "10"  # dim_table 不计入总分
+    assert row["dim_table"] == "1"
     assert row["needs_manual"] == "否"
