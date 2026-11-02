@@ -100,7 +100,9 @@ def test_cross_page_table_classification() -> None:
     marked = mark_cross_page_tables(pages)
 
     assert classify_page(marked[1]) == "cross_page_table"
-    assert marked[2].has_table is False
+    # 续页保留“含表格”信号：否则会被列检测误分为多栏，真实长表页丢失
+    assert marked[2].has_table is True
+    assert classify_page(marked[2]) == "single_table"
     assert classify_page(marked[3]) == "multi_column"
 
 

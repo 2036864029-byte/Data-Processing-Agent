@@ -107,7 +107,11 @@ def classify_page(signals: PageSignals) -> str:
 
 
 def mark_cross_page_tables(pages: Mapping[int, PageSignals]) -> dict[int, PageSignals]:
-    """相邻两页都有表格 → 起始页标记为跨页表，后续页不再重复计入。"""
+    """相邻两页都有表格 → 起始页标记为跨页表；续页仍保留“含表格”信号。
+
+    续页不再清零 `has_table`：否则会被列检测误分到 multi_column，
+    导致真实长表页无法进入 single_table 抽样（茅台年报实测）。
+    """
     marked: dict[int, PageSignals] = {}
     for page_no in sorted(pages):
         signals = pages[page_no]
@@ -118,7 +122,7 @@ def mark_cross_page_tables(pages: Mapping[int, PageSignals]) -> dict[int, PageSi
         )
         cross = signals.has_table and page_no + 1 in pages and pages[page_no + 1].has_table
         marked[page_no] = PageSignals(
-            has_table=signals.has_table and not continuation,
+            has_table=signals.has_table,
             has_column=signals.has_column,
             needs_ocr=signals.needs_ocr,
             encoding_bad=signals.encoding_bad,

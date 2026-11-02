@@ -36,6 +36,10 @@ def prepare() -> dict[str, Any]:
     images = REVIEW_ROOT / "images"
     images.mkdir(parents=True, exist_ok=True)
     PARSED_ROOT.mkdir(parents=True, exist_ok=True)
+    for stale in PARSED_ROOT.glob("*.md"):
+        stale.unlink()
+    for stale in images.glob("*.png"):
+        stale.unlink()
 
     entries: list[dict[str, Any]] = []
     for row in rows:
@@ -45,13 +49,12 @@ def prepare() -> dict[str, Any]:
             continue
         page_index = int(row["page_no"]) - 1
         markdown = _extract_page_markdown(file_path, page_index)
-        parsed_path = PARSED_ROOT / f"{sample_id}.md"
-        parsed_path.write_text(markdown, encoding="utf-8")
-        image_path = images / f"{sample_id}.png"
-        _render_page(file_path, page_index, image_path)
-
         meta = manifest.get(sample_id, {})
         status, display, banner = _diagnose(file_path, page_index, markdown, meta)
+        parsed_path = PARSED_ROOT / f"{sample_id}.md"
+        parsed_path.write_text(display, encoding="utf-8")
+        image_path = images / f"{sample_id}.png"
+        _render_page(file_path, page_index, image_path)
         entries.append(
             {
                 "sample_id": sample_id,
