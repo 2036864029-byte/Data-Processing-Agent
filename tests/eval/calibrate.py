@@ -21,7 +21,17 @@ from _lib import (
     write_json,
 )
 
-FEATURES = ("char_density", "glyph_coverage", "header_footer_ratio", "bbox_coverage")
+# 7 个有明确依据的特征：文本量 / 空白伪影 / 表格质量 / 表格占比 /
+# 编号保留 / 段落回流 / 页眉页脚泄漏。n=59 时限制维数避免过拟合。
+FEATURES = (
+    "char_density",
+    "clean_spacing",
+    "table_cell_fill",
+    "prose_ratio",
+    "numbering_ratio",
+    "paragraph_flow",
+    "header_footer_ratio",
+)
 SPEARMAN_MIN = 0.8
 AGREEMENT_MIN = 0.85
 
@@ -45,6 +55,7 @@ def calibrate() -> dict[str, Any]:
         return report
 
     fit, holdout = _split(records)
+    active = _active_features(fit)
     density_scale = max(
         (record["features"]["char_density"] for record in fit), default=1.0
     ) or 1.0
@@ -52,13 +63,16 @@ def calibrate() -> dict[str, Any]:
         record["features"]["char_density"] /= density_scale
 
     weights = fit_nonnegative_weights(
-        [record["features"] for record in fit],
+        [
+            {name: record["features"].get(name, 0.0) for name in active}
+            for record in fit
+        ],
         [record["target"] for record in fit],
     )
     for record in records:
         record["quality"] = sum(
             weights.get(name, 0.0) * record["features"].get(name, 0.0)
-            for name in FEATURES
+            for name in active
         )
 
     fit_pairs = [(record["quality"], record["needs_manual"]) for record in fit]
@@ -81,6 +95,7 @@ def calibrate() -> dict[str, Any]:
     report = {
         "status": "ok",
         "weights": weights,
+        "features_used": active,
         "density_scale": density_scale,
         "threshold": threshold,
         "fit_agreement": round(fit_agreement, 4),
@@ -118,18 +133,38 @@ def _record(
     if metric is None:
         return None
     total = sum(int(value) for value in dims) / 12
+    # 表格指标：非表格页取中性值（fill=1），不干扰拟合
+    features = {name: float(metric.get(name, 0) or 0) for name in FEATURES}
+    features["table_cell_fill"] = float(metric.get("table_cell_fill") or 1.0)
     return {
         "sample_id": row["sample_id"],
         "category": row["category"],
         "target": total,
         "needs_manual": needs_manual in {"是", "true", "yes", "1"},
-        "features": {name: float(metric.get(name, 0) or 0) for name in FEATURES},
+        "features": features,
     }
+
+
+def _active_features(fit: list[dict[str, Any]]) -> list[str]:
+    """丢弃拟合集上身零方差的特征（常量列只会干扰回归）。"""
+    active: list[str] = []
+    for name in FEATURES:
+        values = [record["features"].get(name, 0.0) for record in fit]
+        mean = sum(values) / len(values) if values else 0.0
+        variance = (
+            sum((value - mean) ** 2 for value in values) / len(values)
+            if values
+            else 0.0
+        )
+        if variance > 1e-12:
+            active.append(name)
+    return active
 
 
 def _split(
     records: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """分类别 + needs_manual 分层切分，保证留出集含正例。"""
     by_category: dict[str, list[dict[str, Any]]] = {}
     for record in records:
         by_category.setdefault(record["category"], []).append(record)
@@ -139,9 +174,14 @@ def _split(
         rows = sorted(
             by_category[category], key=lambda item: str(item["sample_id"])
         )
-        fit_count = max(1, round(len(rows) * 2 / 3))
-        fit.extend(rows[:fit_count])
-        holdout.extend(rows[fit_count:])
+        positives = [row for row in rows if row["needs_manual"]]
+        negatives = [row for row in rows if not row["needs_manual"]]
+        for group in (positives, negatives):
+            if not group:
+                continue
+            fit_count = max(1, round(len(group) * 2 / 3))
+            fit.extend(group[:fit_count])
+            holdout.extend(group[fit_count:])
     return fit, holdout
 
 
