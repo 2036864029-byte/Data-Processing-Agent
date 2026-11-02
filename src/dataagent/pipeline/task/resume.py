@@ -11,14 +11,62 @@ from pathlib import Path
 from typing import Any
 
 from dataagent.contracts.errors import DefectCode
+from dataagent.kernel.supervisor import Supervisor
 from dataagent.pipeline.output.delivery import DeliveryLevel
 from dataagent.pipeline.repair.fallback import FallbackPath
+from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.task.models import DocumentOutcome
+from dataagent.platform.store.sql.task_state import TaskStateStore
 
 
 def input_signature(paths: Sequence[Path]) -> str:
     joined = "\n".join(str(path) for path in paths)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def load_resume_outcomes(
+    store: TaskStateStore | None,
+    task_id: str,
+    signature: str,
+    *,
+    resume: bool,
+    plan_present: bool,
+) -> list[dict[str, Any]]:
+    """按输入签名决定续跑结果；不匹配则清空并登记新签名。"""
+    if store is None:
+        return []
+    if resume and not plan_present and store.input_signature(task_id) == signature:
+        return store.outcomes(task_id)
+    store.reset_outcomes(task_id)
+    store.set_input_signature(task_id, signature)
+    return []
+
+
+def mark_resumed(
+    contexts: Sequence[DocumentContext], stored: Sequence[dict[str, Any]]
+) -> int:
+    """把已完成文档标记为已处理，返回可续跑数量。"""
+    resumed = 0
+    for payload in stored[: len(contexts)]:
+        if not payload:
+            break
+        resumed += 1
+    for context in contexts[:resumed]:
+        context.processed.update(context.universe)
+    return resumed
+
+
+def persist_outcome(
+    store: TaskStateStore | None,
+    supervisor: Supervisor,
+    task_id: str,
+    index: int,
+    outcome: DocumentOutcome,
+) -> None:
+    if store is None:
+        return
+    store.save_outcome(task_id, index, outcome_to_payload(outcome))
+    supervisor.commit_batch(task_id, index)
 
 
 def outcome_to_payload(outcome: DocumentOutcome) -> dict[str, Any]:

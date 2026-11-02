@@ -29,6 +29,9 @@ class ExtractionService:
         self._registry = registry
         self._profiles = profiles
 
+    def supports(self, family: Family) -> bool:
+        return family in EXTRACT_CAPABILITIES
+
     def extract(
         self,
         context: DocumentContext,
