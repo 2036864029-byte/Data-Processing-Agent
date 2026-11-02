@@ -7,19 +7,38 @@ P0 不做运行时切换（G10 单一配置）：单进程一份引擎，由 con
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from sqlalchemy import Connection, Engine, create_engine
 
 
-def create_db_engine(url: str, pool_pre_ping: bool = True) -> Engine:
+def create_db_engine(
+    url: str,
+    pool_pre_ping: bool = True,
+    *,
+    connect_args: Mapping[str, Any] | None = None,
+) -> Engine:
     """创建 SQLAlchemy Core 引擎（pool_pre_ping 保证连接健康，长任务可续跑）。"""
-    return create_engine(url, pool_pre_ping=pool_pre_ping)
+    return create_engine(
+        url,
+        pool_pre_ping=pool_pre_ping,
+        connect_args=dict(connect_args or {}),
+    )
 
 
 class Database:
     """单进程数据库连接工厂：引擎 + connect() 上下文入口。"""
 
-    def __init__(self, url: str) -> None:
-        self._engine = create_db_engine(url, pool_pre_ping=True)
+    def __init__(
+        self,
+        url: str,
+        *,
+        connect_args: Mapping[str, Any] | None = None,
+    ) -> None:
+        self._engine = create_db_engine(
+            url, pool_pre_ping=True, connect_args=connect_args
+        )
 
     @property
     def engine(self) -> Engine:

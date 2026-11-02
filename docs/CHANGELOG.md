@@ -81,6 +81,10 @@
     接入审计（`AuditAction.INGEST`）与告警评估（告警走旁路 sink）
   - `configure_logging` 显式重新启用 logger；Alembic `fileConfig` 改为
     `disable_existing_loggers=False`，迁移不再吞掉应用日志
+  - 任务进度落库：`task_progress` 表（迁移 0007），runner 在任务开始 /
+    每文档完成 / 任务结束低频 upsert；`/status` 与 `dataagent status`
+    经 `SqlStatusProvider` 只读查询；写失败只记日志、不影响主链路；
+    worker 仍无状态（状态在 PG，不在进程内）
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算

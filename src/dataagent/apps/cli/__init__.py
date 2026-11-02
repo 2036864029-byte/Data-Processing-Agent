@@ -12,6 +12,7 @@ import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from dataagent.apps.api.status import SqlStatusProvider, StatusProvider
 from dataagent.apps.cli.commands import (
     DEFAULT_MIN_FREE_MB,
     bench_lines,
@@ -28,6 +29,8 @@ from dataagent.apps.worker.worker import ShellBatchHandler, Worker, WorkerConfig
 from dataagent.platform.config import Settings, settings_from_yaml
 from dataagent.platform.runtime.heartbeat import HeartbeatMonitor
 from dataagent.platform.store.queue.redis import redis_queue_from_url
+from dataagent.platform.store.sql.engine import Database
+from dataagent.platform.store.sql.tasks import SqlTaskProgressStore
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "status":
-        _print_lines(status_lines())
+        _print_lines(status_lines(_status_provider()))
         return 0
     if args.command == "bench":
         lines = bench_lines(
@@ -98,6 +101,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _print_lines(lines: Sequence[str]) -> None:
     for line in lines:
         print(line)
+
+
+def _status_provider() -> StatusProvider | None:
+    """状态读 PG；库未就绪时回退空状态，保证 status 命令始终可用。"""
+    try:
+        settings = Settings()
+        database = Database(
+            settings.postgres_url, connect_args={"connect_timeout": 2}
+        )
+        return SqlStatusProvider(SqlTaskProgressStore(database))
+    except Exception:
+        return None
 
 
 def _run_logs(args: argparse.Namespace) -> int:

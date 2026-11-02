@@ -17,6 +17,7 @@ P0 口径说明：
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -105,6 +106,7 @@ from dataagent.pipeline.sniff.dispatcher import DispatchAction, FormatDispatcher
 from dataagent.pipeline.sniff.sniffer import Family, SniffResult, sniff_file
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event, span
+from dataagent.platform.store.sql.tasks import TaskProgress, TaskProgressStore
 
 DEFAULT_BATCH_PAGES: Final[int] = 32
 # P0 字符密度口径：A4 版心近似面积（cm²）；P1 由真实 bbox 替换
@@ -233,6 +235,7 @@ class TaskRunner:
         tier_policy: RuleTierPolicy | None = None,
         pending: PendingQueue | None = None,
         telemetry: TaskTelemetry | None = None,
+        progress: TaskProgressStore | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._ingestor = ingestor
@@ -250,6 +253,7 @@ class TaskRunner:
         self._tier_policy = tier_policy if tier_policy is not None else RuleTierPolicy()
         self._pending = pending
         self._telemetry = telemetry if telemetry is not None else TaskTelemetry()
+        self._progress = progress
         self._clock = clock
         self._task_id = "task-local"
         self._reused: dict[str, DocumentOutcome] = {}
@@ -267,6 +271,9 @@ class TaskRunner:
         self._reused = {}
         self._contexts = {}
         self._telemetry.reset()
+        self._record_progress(
+            "running", done=0, total=0, detail={"files": len(paths)}
+        )
 
         outcomes: dict[str, DocumentOutcome] = {}
         analyzed: list[_DocContext] = []
@@ -283,11 +290,18 @@ class TaskRunner:
                     analyzed.append(result)
 
             total_pages = sum(len(context.universe) for context in analyzed)
+            self._record_progress(
+                "running",
+                done=0,
+                total=total_pages,
+                detail={"files": len(paths), "documents": len(analyzed)},
+            )
             resolution, decisions, stopped_by = self._execute_plan(
                 analyzed, total_pages
             )
 
-            for context in analyzed:
+            done_pages = 0
+            for index, context in enumerate(analyzed, start=1):
                 with span(
                     "finalize",
                     doc_id=context.record.doc_id,
@@ -296,6 +310,16 @@ class TaskRunner:
                     outcomes[context.record.path] = self._finalize(
                         context, stopped_by
                     )
+                done_pages += len(context.universe)
+                self._record_progress(
+                    "running",
+                    done=done_pages,
+                    total=total_pages,
+                    detail={
+                        "documents_done": index,
+                        "documents_total": len(analyzed),
+                    },
+                )
 
             # 同内容文件在分析阶段先于原件完成：此时原件结果已落定，回填复用结果
             for duplicate_path, doc_id in self._duplicates:
@@ -330,6 +354,23 @@ class TaskRunner:
                     count=len(alerts),
                     kinds=[alert.kind.value for alert in alerts],
                 )
+            self._record_progress(
+                "finished",
+                done=stats.pages_processed,
+                total=stats.pages_total,
+                detail={
+                    "processed_docs": sum(
+                        1 for item in outcomes.values() if item.status == "processed"
+                    ),
+                    "pending": sum(
+                        1
+                        for item in outcomes.values()
+                        if item.status in {"pending", "rejected"}
+                    ),
+                    "gap_pages": stats.pages_failed,
+                    "duration_s": round(stats.duration_s, 3),
+                },
+            )
             log_event(
                 "task_finished",
                 task_id=task_id,
@@ -367,9 +408,18 @@ class TaskRunner:
         self._contexts = {}
         self._duplicates = []
         self._telemetry.reset()
+        self._record_progress(
+            "running", done=0, total=0, detail={"files": 1}
+        )
         with span("task", task_id=task_id, stage="task"):
             result = self._analyze(Path(path))
             if isinstance(result, DocumentOutcome):
+                self._record_progress(
+                    "finished",
+                    done=0,
+                    total=0,
+                    detail={"status": result.status},
+                )
                 return result
             requested = [page for page in pages if page in result.universe]
             self._process_stage(
@@ -380,6 +430,15 @@ class TaskRunner:
             with span("output", stage="output"):
                 self._write_outputs([result])
             self._telemetry.finish(task_id)
+            self._record_progress(
+                "finished",
+                done=len(requested),
+                total=len(result.universe),
+                detail={
+                    "status": outcome.status,
+                    "gap_pages": outcome.gap_pages,
+                },
+            )
             return outcome
 
     # ── Phase A：接入 / 判定 / 路由 / 画像路由段 ──────────────────────────
@@ -504,6 +563,36 @@ class TaskRunner:
         self._telemetry.record_ingest(
             doc_id=doc_id, path=path, status=status, family=family
         )
+
+    def _record_progress(
+        self,
+        state: str,
+        *,
+        done: int,
+        total: int,
+        detail: Mapping[str, Any],
+    ) -> None:
+        """任务进度 best-effort 写入：失败只记日志，不影响主链路。"""
+        if self._progress is None:
+            return
+        try:
+            self._progress.upsert(
+                TaskProgress(
+                    task_id=self._task_id,
+                    state=state,
+                    progress=f"{done}/{total}",
+                    pages_total=total,
+                    pages_done=done,
+                    detail=detail,
+                )
+            )
+        except Exception as exc:
+            log_event(
+                "progress_write_failed",
+                level=logging.WARNING,
+                task_id=self._task_id,
+                error=str(exc),
+            )
 
     # ── Phase B：Plan 阶段划分与执行 ────────────────────────────────────
 
@@ -1124,6 +1213,7 @@ def create_builtin_runner(
     output_dir: Path | str = "var/output",
     config: TaskConfig | None = None,
     telemetry: TaskTelemetry | None = None,
+    progress: TaskProgressStore | None = None,
 ) -> TaskRunner:
     """构造内置引擎的 runner（真实 PDF / CSV / TXT 链路，测试与 CLI 共用）。"""
     from dataagent.pipeline.ingest.ingestor import (
@@ -1155,4 +1245,5 @@ def create_builtin_runner(
         config=config,
         pending=pending_queue,
         telemetry=telemetry,
+        progress=progress,
     )

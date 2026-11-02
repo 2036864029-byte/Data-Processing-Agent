@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from html import escape
 from typing import Protocol
 
+from dataagent.platform.store.sql.tasks import TaskProgressStore
+
 
 @dataclass(frozen=True, slots=True)
 class TaskStatus:
@@ -23,6 +25,7 @@ class ServiceStatus:
     tasks: tuple[TaskStatus, ...] = ()
     queue_depth: int = 0
     alive_workers: int = 0
+    note: str = ""
 
 
 class StatusProvider(Protocol):
@@ -38,6 +41,30 @@ class EmptyStatusProvider:
         return ServiceStatus()
 
 
+class SqlStatusProvider:
+    """从 PG `task_progress` 读取任务进度（只读，不持有运行中对象）。"""
+
+    def __init__(self, store: TaskProgressStore, *, limit: int = 50) -> None:
+        self._store = store
+        self._limit = limit
+
+    def snapshot(self) -> ServiceStatus:
+        try:
+            items = self._store.recent(self._limit)
+        except Exception as exc:
+            return ServiceStatus(note=f"状态库不可用：{exc}")
+        return ServiceStatus(
+            tasks=tuple(
+                TaskStatus(
+                    task_id=item.task_id,
+                    state=item.state,
+                    progress=item.progress,
+                )
+                for item in items
+            )
+        )
+
+
 def render_status(status: ServiceStatus) -> str:
     rows = "".join(
         "<tr>"
@@ -49,6 +76,7 @@ def render_status(status: ServiceStatus) -> str:
     )
     if not rows:
         rows = '<tr><td colspan="3">暂无任务</td></tr>'
+    note = f'<p class="note">{escape(status.note)}</p>' if status.note else ""
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -60,11 +88,13 @@ body {{ font-family: system-ui, sans-serif; margin: 2rem; color: #1f2933; }}
 table {{ border-collapse: collapse; margin-top: 1rem; }}
 th, td {{ border: 1px solid #cbd2d9; padding: .4rem .8rem; text-align: left; }}
 th {{ background: #f5f7fa; }}
+.note {{ color: #b26a00; }}
 </style>
 </head>
 <body>
 <h1>DataAgent 状态</h1>
 <p>队列深度：{status.queue_depth}　存活 worker：{status.alive_workers}</p>
+{note}
 <table>
 <thead><tr><th>任务</th><th>状态</th><th>进度</th></tr></thead>
 <tbody>{rows}</tbody>
