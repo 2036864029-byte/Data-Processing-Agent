@@ -95,12 +95,13 @@ def _header_ok(header: list[str], separator: list[str]) -> bool:
 
 
 def _cell_fill(header: list[str], rows: list[list[str]]) -> float:
-    all_rows = [header, *rows]
-    columns = max((len(row) for row in all_rows), default=0)
-    if columns == 0 or not all_rows:
+    """数据行填充率；无数据行时退回表头（表头有效性另由 header_ok 判断）。"""
+    evaluated = rows if rows else [header]
+    columns = max((len(row) for row in evaluated), default=0)
+    if columns == 0 or not evaluated:
         return 0.0
-    total = columns * len(all_rows)
-    filled = sum(1 for row in all_rows for cell in row if cell)
+    total = columns * len(evaluated)
+    filled = sum(1 for row in evaluated for cell in row if cell)
     return round(filled / total, 6)
 
 

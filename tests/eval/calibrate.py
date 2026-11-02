@@ -55,6 +55,7 @@ def calibrate() -> dict[str, Any]:
         return report
 
     fit, holdout = _split(records)
+    cv = cross_validate(records)
     active = _active_features(fit)
     density_scale = max(
         (record["features"]["char_density"] for record in fit), default=1.0
@@ -102,6 +103,7 @@ def calibrate() -> dict[str, Any]:
         "holdout_spearman": round(holdout_spearman, 4),
         "holdout_agreement": round(holdout_agreement, 4),
         "counts": {"fit": len(fit), "holdout": len(holdout)},
+        "cross_validation": cv,
         "gates": {
             "spearman_min": SPEARMAN_MIN,
             "agreement_min": AGREEMENT_MIN,
@@ -143,6 +145,91 @@ def _record(
         "needs_manual": needs_manual in {"是", "true", "yes", "1"},
         "features": features,
     }
+
+
+def cross_validate(records: list[dict[str, Any]], k: int = 5) -> dict[str, Any]:
+    """分类别 + needs_manual 分层的 k 折交叉验证（不占用固定留出集）。"""
+    groups: dict[tuple[str, bool], list[dict[str, Any]]] = {}
+    for record in records:
+        key = (record["category"], record["needs_manual"])
+        groups.setdefault(key, []).append(record)
+    folds: list[list[dict[str, Any]]] = [[] for _ in range(k)]
+    for key in sorted(groups):
+        rows = sorted(groups[key], key=lambda item: str(item["sample_id"]))
+        for index, record in enumerate(rows):
+            folds[index % k].append(record)
+    spearmans: list[float] = []
+    agreements: list[float] = []
+    for fold in folds:
+        if not fold:
+            continue
+        fit = [record for other in folds if other is not fold for record in other]
+        if len(fit) < 12:
+            continue
+        spearman_value, agreement = _evaluate(fit, fold)
+        spearmans.append(spearman_value)
+        agreements.append(agreement)
+    return {
+        "folds": len(spearmans),
+        "spearman_mean": round(_mean(spearmans), 4),
+        "spearman_std": round(_std(spearmans), 4),
+        "agreement_mean": round(_mean(agreements), 4),
+        "agreement_std": round(_std(agreements), 4),
+    }
+
+
+def _evaluate(
+    fit: list[dict[str, Any]], holdout: list[dict[str, Any]]
+) -> tuple[float, float]:
+    active = _active_features(fit)
+    scale = max(record["features"]["char_density"] for record in fit) or 1.0
+    fitted = [
+        {
+            **record,
+            "features": {
+                **record["features"],
+                "char_density": record["features"]["char_density"] / scale,
+            },
+        }
+        for record in [*fit, *holdout]
+    ]
+    fit_rows = fitted[: len(fit)]
+    holdout_rows = fitted[len(fit) :]
+    weights = fit_nonnegative_weights(
+        [{name: record["features"].get(name, 0.0) for name in active} for record in fit_rows],
+        [record["target"] for record in fit_rows],
+    )
+    quality = {
+        record["sample_id"]: sum(
+            weights.get(name, 0.0) * record["features"].get(name, 0.0)
+            for name in active
+        )
+        for record in fitted
+    }
+    threshold, _ = best_agreement_threshold(
+        [(quality[record["sample_id"]], record["needs_manual"]) for record in fit_rows]
+    )
+    spearman_value = spearman(
+        [quality[record["sample_id"]] for record in holdout_rows],
+        [record["target"] for record in holdout_rows],
+    )
+    agreement = sum(
+        1
+        for record in holdout_rows
+        if (quality[record["sample_id"]] < threshold) == record["needs_manual"]
+    ) / len(holdout_rows)
+    return spearman_value, agreement
+
+
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _std(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    mean = _mean(values)
+    return (sum((value - mean) ** 2 for value in values) / len(values)) ** 0.5
 
 
 def _active_features(fit: list[dict[str, Any]]) -> list[str]:

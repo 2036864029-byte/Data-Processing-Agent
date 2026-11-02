@@ -22,7 +22,8 @@ def test_empty_header_is_flagged() -> None:
     metrics = table_page_metrics("| | |\n|---|---|\n| 1 | 2 |\n")
     assert metrics is not None
     assert metrics.header_ok is False
-    assert metrics.cell_fill == pytest.approx(0.5)
+    # 数据行完整；表头缺失由 header_ok 单独表达
+    assert metrics.cell_fill == pytest.approx(1.0)
 
 
 def test_ragged_rows_lower_fill_and_raise_variance() -> None:
@@ -43,7 +44,7 @@ def test_multiple_tables_take_worst_case() -> None:
     assert metrics is not None
     assert metrics.tables == 2
     assert metrics.header_ok is False
-    assert metrics.cell_fill == pytest.approx(0.5)
+    assert metrics.cell_fill == pytest.approx(1.0)
 
 
 def test_separator_variants_accepted() -> None:
