@@ -73,6 +73,9 @@
     （非空 / 最大列数×行数）、`row_col_consistency`（每行列数方差）、
     `table_header_ok`；填充率 <0.90、列方差 >1.0 或表头缺失 →
     `table_structure_broken`（缺口页进人工复核）
+  - 跨页表续页表头恢复：仅当上一页表格触底、当前页表格位于页首且列数一致时，
+    沿用上一页表头；缺上下文不猜测。`OperatorContext` 新增 `previous_artifact`，
+    `run_enhancement` 支持注入算子上下文
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算

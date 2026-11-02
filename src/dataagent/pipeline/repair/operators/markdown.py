@@ -44,7 +44,10 @@ def rebuild_table_cells(
     new_lines = list(lines)
     changed = False
     for start, end in blocks:
-        normalized = _normalize_block(lines[start:end])
+        normalized = _recover_continuation_header(
+            lines[start:end], context.previous_artifact
+        )
+        normalized = _normalize_block(normalized)
         changed = changed or normalized != lines[start:end]
         new_lines[start:end] = normalized
     if not changed:
@@ -193,6 +196,32 @@ def _strippable(line: str) -> bool:
 
 def _header_cells(line: str) -> list[str]:
     return [cell.lower() for cell in _split_cells(line)]
+
+
+def _recover_continuation_header(
+    block: list[str], previous: PageArtifact | None
+) -> list[str]:
+    """跨页表续页：表头为空且上一页表格触底时，沿用上一页表头。"""
+    if previous is None or not block:
+        return block
+    header = _split_cells(block[0])
+    if any(header):
+        return block
+    previous_lines = previous.markdown.splitlines()
+    previous_blocks = _table_blocks(previous_lines)
+    if not previous_blocks:
+        return block
+    prev_start, prev_end = previous_blocks[-1]
+    if any(line.strip() for line in previous_lines[prev_end:]):
+        return block  # 上一页表格未触底，不视为跨页续表
+    previous_header = _split_cells(previous_lines[prev_start])
+    if not any(previous_header):
+        return block
+    width = len(previous_header)
+    current_width = max(len(_split_cells(line)) for line in block)
+    if width != current_width:
+        return block
+    return [_join_cells(previous_header), *block[1:]]
 
 
 OPERATORS: Final[Mapping[RepairOperator, OperatorFn]] = {

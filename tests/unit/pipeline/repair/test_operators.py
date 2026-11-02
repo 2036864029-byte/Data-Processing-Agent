@@ -181,3 +181,70 @@ def test_coordinate_dependent_operators_fail_closed() -> None:
         assert outcome.changed is False
         assert outcome.candidate is None
         assert outcome.notes
+
+
+def test_rebuild_table_cells_recovers_continuation_header() -> None:
+    previous = artifact(
+        "| 项目 | 金额 |\n| --- | --- |\n| a | 1 |\n", page_no=1
+    )
+    current = artifact("|  |  |\n| --- | --- |\n| b | 2 |\n", page_no=2)
+
+    outcome = run_operator(
+        RepairOperator.REBUILD_TABLE_CELLS,
+        current,
+        defect(DefectCode.TABLE_STRUCTURE_BROKEN, page_no=2),
+        context(2, previous_artifact=previous),
+    )
+
+    assert outcome.changed is True
+    assert outcome.candidate is not None
+    assert outcome.candidate.markdown.splitlines()[0] == "| 项目 | 金额 |"
+    assert current.markdown.startswith("|  |  |")
+
+
+def test_header_recovery_requires_previous_table_at_page_bottom() -> None:
+    previous = artifact(
+        "| 项目 | 金额 |\n| --- | --- |\n| a | 1 |\n尾注文字\n", page_no=1
+    )
+    current = artifact("|  |  |\n| --- | --- |\n| b | 2 |\n", page_no=2)
+
+    outcome = run_operator(
+        RepairOperator.REBUILD_TABLE_CELLS,
+        current,
+        defect(DefectCode.TABLE_STRUCTURE_BROKEN, page_no=2),
+        context(2, previous_artifact=previous),
+    )
+
+    assert outcome.changed is False
+
+
+def test_header_recovery_rejects_column_mismatch() -> None:
+    previous = artifact(
+        "| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n", page_no=1
+    )
+    current = artifact("|  |  |\n| --- | --- |\n| 1 | 2 |\n", page_no=2)
+
+    outcome = run_operator(
+        RepairOperator.REBUILD_TABLE_CELLS,
+        current,
+        defect(DefectCode.TABLE_STRUCTURE_BROKEN, page_no=2),
+        context(2, previous_artifact=previous),
+    )
+
+    assert outcome.changed is False
+
+
+def test_header_recovery_keeps_existing_header() -> None:
+    previous = artifact(
+        "| 项目 | 金额 |\n| --- | --- |\n| a | 1 |\n", page_no=1
+    )
+    current = artifact("| 名称 | 数量 |\n| --- | --- |\n| b | 2 |\n", page_no=2)
+
+    outcome = run_operator(
+        RepairOperator.REBUILD_TABLE_CELLS,
+        current,
+        defect(DefectCode.TABLE_STRUCTURE_BROKEN, page_no=2),
+        context(2, previous_artifact=previous),
+    )
+
+    assert outcome.changed is False

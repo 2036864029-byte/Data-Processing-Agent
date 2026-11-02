@@ -21,6 +21,7 @@ class OperatorContext:
     page_no: int
     params_hash: str = ""
     next_artifact: PageArtifact | None = None
+    previous_artifact: PageArtifact | None = None
 
 
 @dataclass(frozen=True, slots=True)

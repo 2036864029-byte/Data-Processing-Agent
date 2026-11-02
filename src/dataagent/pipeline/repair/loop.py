@@ -77,9 +77,13 @@ def run_enhancement(
     operators: Mapping[RepairOperator, OperatorFn] | None = None,
     limits: LoopLimits | None = None,
     budget: BudgetTracker | None = None,
+    context: OperatorContext | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> EnhancementOutcome:
     limits = limits if limits is not None else LoopLimits()
+    operator_context = (
+        context if context is not None else OperatorContext(artifact.doc_id, artifact.page_no)
+    )
     current = artifact
     remaining = tuple(defects)
     current_quality = baseline_quality
@@ -115,7 +119,7 @@ def run_enhancement(
             operator,
             current,
             defect,
-            OperatorContext(current.doc_id, current.page_no),
+            operator_context,
             operators=operators,
         )
         rounds += 1

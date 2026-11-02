@@ -94,6 +94,7 @@ from dataagent.pipeline.repair.loop import (
     PageProbe,
     run_enhancement,
 )
+from dataagent.pipeline.repair.operators import OperatorContext
 from dataagent.pipeline.route.routes import (
     InMemoryRouteDecisionStore,
     RegistryPdfClassifier,
@@ -628,6 +629,15 @@ class TaskRunner:
             baseline_quality=report.extract_quality,
             probe=probe,
             limits=LoopLimits(max_rounds=_STRATEGY_ROUNDS.get(strategy, 2)),
+            context=OperatorContext(
+                doc_id=artifact.doc_id,
+                page_no=artifact.page_no,
+                previous_artifact=(
+                    context.artifacts.get(artifact.page_no - 1)
+                    if artifact.page_no > 1
+                    else None
+                ),
+            ),
         )
         if outcome.remaining_defects:
             return outcome
