@@ -85,6 +85,9 @@
     每文档完成 / 任务结束低频 upsert；`/status` 与 `dataagent status`
     经 `SqlStatusProvider` 只读查询；写失败只记日志、不影响主链路；
     worker 仍无状态（状态在 PG，不在进程内）
+  - 队列深度 = Redis Streams 未投递（lag）+ 已投递未确认（PEL）；
+    worker 存活数来自 Redis 心跳键（TTL 120s，60s 内有心跳计存活），
+    worker 每个 poll 周期 best-effort 上报，进程退出后 key 自然过期
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import os
-from typing import cast
+from typing import Any, cast
 
 import redis
 import redis.exceptions
@@ -21,6 +21,8 @@ from dataagent.platform.store.queue.base import Queue, ReceivedMessage
 _Fields = dict[bytes, bytes]
 _StreamItems = list[tuple[str, list[tuple[str, _Fields]]]]
 _XAddFields = dict[FieldT, EncodableT]  # redis-py xadd 期望的字段类型
+
+DEFAULT_BATCH_STREAM = "dataagent:batches"
 
 
 class RedisQueue(Queue):
@@ -78,6 +80,26 @@ class RedisQueue(Queue):
         if not summary:
             return 0
         return int(summary["pending"])
+
+    def depth(self) -> int:
+        """队列深度 = 未投递（lag）+ 已投递未确认（PEL）。"""
+        pending = self.pending_count()
+        try:
+            groups = self._r.xinfo_groups(self._stream)
+        except redis.exceptions.ResponseError:
+            return pending
+        for raw_group in groups:
+            group = cast(dict[Any, Any], raw_group)
+            name = group.get("name", group.get(b"name"))
+            if isinstance(name, bytes):
+                name = name.decode()
+            if name != self._group:
+                continue
+            lag = group.get("lag", group.get(b"lag"))
+            if lag is None:
+                return pending
+            return int(lag) + pending
+        return pending
 
     def dead_letter_count(self) -> int:
         return self._r.xlen(self._dead)

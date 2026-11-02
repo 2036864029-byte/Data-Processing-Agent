@@ -28,7 +28,11 @@ from dataagent.apps.cli.service import start_service
 from dataagent.apps.worker.worker import ShellBatchHandler, Worker, WorkerConfig
 from dataagent.platform.config import Settings, settings_from_yaml
 from dataagent.platform.runtime.heartbeat import HeartbeatMonitor
-from dataagent.platform.store.queue.redis import redis_queue_from_url
+from dataagent.platform.runtime.liveness import worker_registry_from_url
+from dataagent.platform.store.queue.redis import (
+    DEFAULT_BATCH_STREAM,
+    redis_queue_from_url,
+)
 from dataagent.platform.store.sql.engine import Database
 from dataagent.platform.store.sql.tasks import SqlTaskProgressStore
 
@@ -110,7 +114,15 @@ def _status_provider() -> StatusProvider | None:
         database = Database(
             settings.postgres_url, connect_args={"connect_timeout": 2}
         )
-        return SqlStatusProvider(SqlTaskProgressStore(database))
+        return SqlStatusProvider(
+            SqlTaskProgressStore(database),
+            queue=redis_queue_from_url(
+                settings.redis_url,
+                stream=DEFAULT_BATCH_STREAM,
+                consumer="status",
+            ),
+            workers=worker_registry_from_url(settings.redis_url),
+        )
     except Exception:
         return None
 
@@ -172,12 +184,15 @@ def _run_up(args: argparse.Namespace) -> int:
 
 def _build_worker_target(settings: Settings) -> Callable[[threading.Event], None]:
     def target(stop: threading.Event) -> None:
-        queue = redis_queue_from_url(settings.redis_url, stream="dataagent:batches")
+        queue = redis_queue_from_url(
+            settings.redis_url, stream=DEFAULT_BATCH_STREAM
+        )
         worker = Worker(
             queue=queue,
             handler=ShellBatchHandler(),
             heartbeat=HeartbeatMonitor(),
             config=WorkerConfig(),
+            liveness=worker_registry_from_url(settings.redis_url),
         )
         worker.run_forever(stop)
 

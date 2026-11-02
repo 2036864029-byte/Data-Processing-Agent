@@ -197,3 +197,34 @@ def test_task_runner_batch_handler_expands_page_range() -> None:
     )
 
     assert runner.calls == [(Path("/corpus/doc-7.pdf"), [33, 34, 35], "task-9")]
+
+
+class RecordingLiveness:
+    def __init__(self) -> None:
+        self.beats: list[tuple[str, str | None]] = []
+
+    def beat(self, worker_id: str, *, task_id: str | None = None) -> None:
+        self.beats.append((worker_id, task_id))
+
+    def alive(self) -> int:
+        return 0
+
+
+def test_worker_reports_liveness_on_run_once() -> None:
+    from dataagent.apps.worker.worker import Worker, WorkerConfig
+
+    queue = FakeQueue(messages=[make_message(page_range=(1, 2))])
+    liveness = RecordingLiveness()
+    worker = Worker(
+        queue=queue,
+        handler=RecordingHandler(),
+        heartbeat=HeartbeatMonitor(clock=lambda: 0.0),
+        config=WorkerConfig(),
+        liveness=liveness,
+        worker_id="worker-1",
+    )
+
+    worker.run_once()
+
+    assert liveness.beats[0] == ("worker-1", None)
+    assert liveness.beats[-1] == ("worker-1", "task-1")

@@ -34,6 +34,14 @@ class StatusProvider(Protocol):
     def snapshot(self) -> ServiceStatus: ...
 
 
+class QueueDepthSource(Protocol):
+    def depth(self) -> int: ...
+
+
+class WorkerLivenessSource(Protocol):
+    def alive(self) -> int: ...
+
+
 class EmptyStatusProvider:
     """P0-A 骨架：无任务时的空状态源。"""
 
@@ -42,17 +50,43 @@ class EmptyStatusProvider:
 
 
 class SqlStatusProvider:
-    """从 PG `task_progress` 读取任务进度（只读，不持有运行中对象）。"""
+    """从 PG `task_progress` 读取任务进度；队列 / worker 存活来自 Redis。"""
 
-    def __init__(self, store: TaskProgressStore, *, limit: int = 50) -> None:
+    def __init__(
+        self,
+        store: TaskProgressStore,
+        *,
+        queue: QueueDepthSource | None = None,
+        workers: WorkerLivenessSource | None = None,
+        limit: int = 50,
+    ) -> None:
         self._store = store
+        self._queue = queue
+        self._workers = workers
         self._limit = limit
 
     def snapshot(self) -> ServiceStatus:
+        notes: list[str] = []
         try:
             items = self._store.recent(self._limit)
         except Exception as exc:
-            return ServiceStatus(note=f"状态库不可用：{exc}")
+            items = []
+            notes.append(f"状态库不可用：{exc}")
+
+        queue_depth = 0
+        if self._queue is not None:
+            try:
+                queue_depth = self._queue.depth()
+            except Exception as exc:
+                notes.append(f"队列深度不可用：{exc}")
+
+        alive_workers = 0
+        if self._workers is not None:
+            try:
+                alive_workers = self._workers.alive()
+            except Exception as exc:
+                notes.append(f"worker 存活数不可用：{exc}")
+
         return ServiceStatus(
             tasks=tuple(
                 TaskStatus(
@@ -61,7 +95,10 @@ class SqlStatusProvider:
                     progress=item.progress,
                 )
                 for item in items
-            )
+            ),
+            queue_depth=queue_depth,
+            alive_workers=alive_workers,
+            note="；".join(notes),
         )
 
 

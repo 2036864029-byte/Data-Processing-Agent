@@ -37,3 +37,43 @@ def test_status_provider_reports_store_failure() -> None:
     assert status.tasks == ()
     assert "状态库不可用" in status.note
     assert "状态库不可用" in render_status(status)
+
+
+def test_status_provider_reads_queue_and_workers() -> None:
+    class FakeQueue:
+        def depth(self) -> int:
+            return 7
+
+    class FakeWorkers:
+        def alive(self) -> int:
+            return 3
+
+    store = InMemoryTaskProgressStore()
+    status = SqlStatusProvider(
+        store, queue=FakeQueue(), workers=FakeWorkers()
+    ).snapshot()
+
+    assert status.queue_depth == 7
+    assert status.alive_workers == 3
+    assert status.note == ""
+
+
+def test_status_provider_degrades_when_sources_fail() -> None:
+    class BrokenQueue:
+        def depth(self) -> int:
+            raise RuntimeError("redis down")
+
+    class BrokenWorkers:
+        def alive(self) -> int:
+            raise RuntimeError("redis down")
+
+    status = SqlStatusProvider(
+        InMemoryTaskProgressStore(),
+        queue=BrokenQueue(),
+        workers=BrokenWorkers(),
+    ).snapshot()
+
+    assert status.queue_depth == 0
+    assert status.alive_workers == 0
+    assert "队列深度不可用" in status.note
+    assert "worker 存活数不可用" in status.note

@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import logging
+import os
+import socket
 import sys
 import threading
 from collections.abc import Callable
@@ -14,7 +17,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from dataagent.contracts.messages import ParseRequest
+from dataagent.platform.observe.log import log_event
 from dataagent.platform.runtime.heartbeat import HeartbeatMonitor
+from dataagent.platform.runtime.liveness import WorkerLiveness
 from dataagent.platform.store.queue.base import Queue
 
 if TYPE_CHECKING:
@@ -73,6 +78,8 @@ class Worker:
         handler: BatchHandler,
         heartbeat: HeartbeatMonitor,
         config: WorkerConfig = DEFAULT_WORKER_CONFIG,
+        liveness: WorkerLiveness | None = None,
+        worker_id: str = "",
     ) -> None:
         if config.max_messages < 1:
             raise ValueError("max_messages 必须 ≥ 1")
@@ -80,9 +87,26 @@ class Worker:
         self._handler = handler
         self._heartbeat = heartbeat
         self._config = config
+        self._liveness = liveness
+        self._worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
+
+    def _beat(self, task_id: str | None = None) -> None:
+        """存活心跳 best-effort：Redis 抖动不影响 worker 主循环。"""
+        if self._liveness is None:
+            return
+        try:
+            self._liveness.beat(self._worker_id, task_id=task_id)
+        except Exception as exc:
+            log_event(
+                "worker_heartbeat_failed",
+                level=logging.WARNING,
+                worker_id=self._worker_id,
+                error=str(exc),
+            )
 
     def run_once(self) -> int:
         """取一批消息；成功处理 → 心跳（按页进展）+ ACK，失败 → 死信。"""
+        self._beat()
         messages = self._queue.receive(self._config.max_messages)
         for message in messages:
             try:
@@ -92,12 +116,14 @@ class Worker:
                 self._queue.dead_letter(message.id)
                 continue
             self._heartbeat.beat(request.task_id, request.page_range[1])
+            self._beat(request.task_id)
             self._queue.ack(message.id)
         return len(messages)
 
     def run_forever(self, stop: threading.Event) -> None:
         """空壳循环：队列空则按 poll_interval 等待；后端暂不可用则告警后重试。"""
         while not stop.is_set():
+            self._beat()
             try:
                 processed = self.run_once()
             except Exception as exc:
