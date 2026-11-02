@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from dataagent.pipeline.task_runner import create_builtin_runner
+from dataagent.pipeline.task.factory import create_builtin_runner
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.alerts import (
     Alert,

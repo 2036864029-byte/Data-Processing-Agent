@@ -17,7 +17,6 @@ P0 口径说明：
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -46,7 +45,6 @@ from dataagent.kernel.plan import (
     PlanStageSpec,
     StageExecution,
 )
-from dataagent.kernel.policies.rule_route import RuleRoutePolicy
 from dataagent.kernel.policies.rule_tier import RuleTierPolicy
 from dataagent.kernel.registry import PluginRegistry
 from dataagent.kernel.state import Event, State
@@ -61,7 +59,6 @@ from dataagent.pipeline.ingest.ingestor import (
     Ingestor,
     IngestOutcome,
     PendingQueue,
-    PendingRecord,
 )
 from dataagent.pipeline.merge.merger import MergedDocument, merge_document
 from dataagent.pipeline.output.delivery import (
@@ -73,10 +70,9 @@ from dataagent.pipeline.output.formats import to_csv, to_excel, to_json, to_mark
 from dataagent.pipeline.output.reports import (
     DocSummary,
     PageDetail,
-    ProcessReport,
     build_report,
 )
-from dataagent.pipeline.profile.writer import InMemoryProfileStore, PageProfileWriter
+from dataagent.pipeline.profile.writer import PageProfileWriter
 from dataagent.pipeline.quality.gate import (
     InMemoryQualityResultStore,
     QualityGate,
@@ -88,11 +84,8 @@ from dataagent.pipeline.quality.l1_check import (
     L1PageInput,
     defects_for_repair,
 )
-from dataagent.pipeline.quality.l2_sample import ProfileSpeed
 from dataagent.pipeline.quality.table_metrics import table_page_metrics
 from dataagent.pipeline.repair.fallback import (
-    EnhancerKind,
-    FallbackConfig,
     FallbackPath,
     resolve_fallback,
 )
@@ -105,26 +98,29 @@ from dataagent.pipeline.repair.loop import (
 )
 from dataagent.pipeline.repair.operators import OperatorContext
 from dataagent.pipeline.route.routes import (
-    InMemoryRouteDecisionStore,
-    RegistryPdfClassifier,
     RoutingOutcome,
     TwoLevelRouter,
 )
 from dataagent.pipeline.sniff.dispatcher import DispatchAction, FormatDispatcher
 from dataagent.pipeline.sniff.sniffer import Family, SniffResult, sniff_file
+from dataagent.pipeline.task.models import (
+    DocumentOutcome,
+    TaskConfig,
+    TaskOutcome,
+    TaskStats,
+)
+from dataagent.pipeline.task.resume import (
+    input_signature,
+    outcome_from_payload,
+    outcome_to_payload,
+)
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event, span
-from dataagent.platform.store.sql.engine import Database
 from dataagent.platform.store.sql.task_state import (
     InMemoryTaskStateStore,
-    SqlTaskStateStore,
     TaskStateStore,
 )
 from dataagent.platform.store.sql.tasks import TaskProgress, TaskProgressStore
-
-DEFAULT_BATCH_PAGES: Final[int] = 32
-# P0 字符密度口径：A4 版心近似面积（cm²）；P1 由真实 bbox 替换
-DEFAULT_TEXT_AREA_CM2: Final[float] = 468.0
 
 _EXTRACT_CAPABILITIES: Final[Mapping[Family, str]] = {
     Family.PDF: "pdf.text.extract",
@@ -144,78 +140,6 @@ _STRATEGY_ROUNDS: Final[Mapping[str, int]] = {
     "balanced": 2,
     "fast": 1,
 }
-
-_DEFAULT_FALLBACK: Final[FallbackConfig] = FallbackConfig()
-
-
-@dataclass(frozen=True, slots=True)
-class TaskConfig:
-    output_formats: tuple[str, ...] = ("json", "markdown")
-    batch_pages: int = DEFAULT_BATCH_PAGES
-    text_area_cm2: float = DEFAULT_TEXT_AREA_CM2
-    gap_tolerance: float = 0.05
-    fallback: FallbackConfig = _DEFAULT_FALLBACK
-    available_enhancers: frozenset[EnhancerKind] = frozenset()
-    profile_speed: ProfileSpeed = ProfileSpeed.BALANCED
-    plan: FrozenPlan | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class TaskStats:
-    pages_total: int = 0
-    pages_processed: int = 0
-    pages_failed: int = 0
-    stp_rate: float = 0.0
-    gap_ratio: float = 0.0
-    avg_extract_quality: float = 0.0
-    duration_s: float = 0.0
-    model_calls: int = 0
-    stopped_by: str | None = None
-
-    def as_plan_stats(self) -> dict[str, float | int]:
-        """映射到 Plan 分支白名单指标（PLAN_METRICS 子集）。"""
-        return {
-            "stp_rate": self.stp_rate,
-            "pages_total": self.pages_total,
-            "pages_processed": self.pages_processed,
-            "pages_failed": self.pages_failed,
-            "gap_ratio": self.gap_ratio,
-            "avg_extract_quality": self.avg_extract_quality,
-            "elapsed_s": self.duration_s,
-            "model_calls": self.model_calls,
-            "cost_per_page": 0.0,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class DocumentOutcome:
-    doc_id: str
-    path: str
-    family: str
-    status: str = "processed"
-    pages: int = 0
-    gap_pages: int = 0
-    level: DeliveryLevel | None = None
-    defect_codes: tuple[DefectCode, ...] = ()
-    outputs: tuple[str, ...] = ()
-    fallback_path: FallbackPath | None = None
-    note: str = ""
-    avg_extract_quality: float = 0.0
-    failure_counts: tuple[tuple[DefectCode, int], ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class TaskOutcome:
-    documents: tuple[DocumentOutcome, ...]
-    report: ProcessReport
-    stats: TaskStats
-    pending: tuple[PendingRecord, ...] = ()
-    plan_resolution: PlanResolution | None = None
-    decisions: tuple[DecisionRecord, ...] = ()
-    machine_state: str | None = None
-
-    def count(self, status: str) -> int:
-        return sum(1 for document in self.documents if document.status == status)
 
 
 @dataclass
@@ -307,7 +231,7 @@ class TaskRunner:
         self._contexts = {}
         self._telemetry.reset()
         ordered_paths = sorted((Path(path) for path in paths), key=str)
-        signature = _input_signature(ordered_paths)
+        signature = input_signature(ordered_paths)
         stored: list[dict[str, Any]] = []
         if self._state_store is not None:
             if (
@@ -375,7 +299,7 @@ class TaskRunner:
             done_pages = 0
             for index, context in enumerate(analyzed):
                 if index < resumed:
-                    restored = _outcome_from_payload(stored[index])
+                    restored = outcome_from_payload(stored[index])
                     outcomes[context.record.path] = restored
                     self._reused[restored.doc_id] = restored
                 else:
@@ -388,7 +312,7 @@ class TaskRunner:
                     outcomes[context.record.path] = outcome
                     if self._state_store is not None:
                         self._state_store.save_outcome(
-                            task_id, index, _outcome_to_payload(outcome)
+                            task_id, index, outcome_to_payload(outcome)
                         )
                         self._supervisor.commit_batch(task_id, index)
                 done_pages += len(context.universe)
@@ -1423,109 +1347,3 @@ def _failure_counts(context: _DocContext) -> tuple[tuple[DefectCode, int], ...]:
         for code in dict.fromkeys(gap.defect_codes):
             counts[code] = counts.get(code, 0) + 1
     return tuple(sorted(counts.items(), key=lambda item: item[0].value))
-
-
-def _input_signature(paths: Sequence[Path]) -> str:
-    joined = "\n".join(str(path) for path in paths)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def _outcome_to_payload(outcome: DocumentOutcome) -> dict[str, Any]:
-    return {
-        "doc_id": outcome.doc_id,
-        "path": outcome.path,
-        "family": outcome.family,
-        "status": outcome.status,
-        "pages": outcome.pages,
-        "gap_pages": outcome.gap_pages,
-        "level": None if outcome.level is None else outcome.level.value,
-        "defect_codes": [code.value for code in outcome.defect_codes],
-        "outputs": list(outcome.outputs),
-        "fallback_path": (
-            None
-            if outcome.fallback_path is None
-            else outcome.fallback_path.value
-        ),
-        "note": outcome.note,
-        "avg_extract_quality": outcome.avg_extract_quality,
-        "failure_counts": [
-            [code.value, count] for code, count in outcome.failure_counts
-        ],
-    }
-
-
-def _outcome_from_payload(payload: Mapping[str, Any]) -> DocumentOutcome:
-    level = payload.get("level")
-    fallback = payload.get("fallback_path")
-    return DocumentOutcome(
-        doc_id=str(payload["doc_id"]),
-        path=str(payload["path"]),
-        family=str(payload["family"]),
-        status=str(payload["status"]),
-        pages=int(payload.get("pages", 0)),
-        gap_pages=int(payload.get("gap_pages", 0)),
-        level=DeliveryLevel(level) if level else None,
-        defect_codes=tuple(
-            DefectCode(value) for value in payload.get("defect_codes", ())
-        ),
-        outputs=tuple(str(value) for value in payload.get("outputs", ())),
-        fallback_path=FallbackPath(fallback) if fallback else None,
-        note=str(payload.get("note", "")),
-        avg_extract_quality=float(payload.get("avg_extract_quality", 0.0)),
-        failure_counts=tuple(
-            (DefectCode(code), int(count))
-            for code, count in payload.get("failure_counts", ())
-        ),
-    )
-
-
-def create_builtin_runner(
-    *,
-    pending: PendingQueue | None = None,
-    output_dir: Path | str = "var/output",
-    config: TaskConfig | None = None,
-    telemetry: TaskTelemetry | None = None,
-    progress: TaskProgressStore | None = None,
-    supervisor: Supervisor | None = None,
-    state_repository: ProgressRepository | None = None,
-    state_store: TaskStateStore | None = None,
-    database: Database | None = None,
-) -> TaskRunner:
-    """构造内置引擎 runner；传入 database 时状态与续跑点落 PG。"""
-    if state_store is None and database is not None:
-        state_store = SqlTaskStateStore(database)
-    """构造内置引擎的 runner（真实 PDF / CSV / TXT 链路，测试与 CLI 共用）。"""
-    from dataagent.pipeline.ingest.ingestor import (
-        InMemoryDocumentStore,
-        InMemoryPendingQueue,
-    )
-    from dataagent.platform.plugins.adapters import builtin_plugins
-
-    document_store = InMemoryDocumentStore()
-    pending_queue = pending if pending is not None else InMemoryPendingQueue()
-    registry = PluginRegistry()
-    for plugin in builtin_plugins():
-        registry.register(plugin, enable=True)
-    classifier = RegistryPdfClassifier(
-        registry, PluginContext(task_id="task-local", doc_id="classifier")
-    )
-    router = TwoLevelRouter(
-        decisions=InMemoryRouteDecisionStore(),
-        policy=RuleRoutePolicy(),
-        classifier=classifier,
-    )
-    return TaskRunner(
-        ingestor=Ingestor(documents=document_store, pending=pending_queue),
-        dispatcher=FormatDispatcher(pending=pending_queue),
-        router=router,
-        registry=registry,
-        profiles=PageProfileWriter(InMemoryProfileStore()),
-        output_dir=output_dir,
-        config=config,
-        pending=pending_queue,
-        telemetry=telemetry,
-        progress=progress,
-        supervisor=supervisor,
-        state_repository=state_repository,
-        state_store=state_store,
-    )

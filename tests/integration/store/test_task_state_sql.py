@@ -9,7 +9,7 @@ from alembic import command
 from alembic.config import Config
 
 from dataagent.kernel.state import State
-from dataagent.pipeline.task_runner import create_builtin_runner
+from dataagent.pipeline.task.factory import create_builtin_runner
 from dataagent.platform.store.sql.engine import Database
 from dataagent.platform.store.sql.task_state import SqlTaskStateStore
 

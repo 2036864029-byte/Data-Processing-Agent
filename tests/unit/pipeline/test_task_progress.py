@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from dataagent.pipeline.task_runner import create_builtin_runner
+from dataagent.pipeline.task.factory import create_builtin_runner
 from dataagent.platform.store.sql.tasks import (
     InMemoryTaskProgressStore,
     TaskProgress,

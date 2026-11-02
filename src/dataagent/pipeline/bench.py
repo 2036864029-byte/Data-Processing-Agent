@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from dataagent.pipeline.task_runner import create_builtin_runner
+from dataagent.pipeline.task.factory import create_builtin_runner
 from dataagent.platform.runtime.resources import (
     MAX_BATCH_PAGES,
     MEMORY_PER_PROCESS_MB,
