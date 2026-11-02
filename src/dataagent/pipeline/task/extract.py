@@ -67,8 +67,6 @@ class ExtractionService:
                 or artifact.page_no in extraction.pages_with_columns,
             )
             if "text_layer_recovered" in artifact.warnings:
-                self._profiles.apply_text_layer_recovery(
-                    context.record.doc_id, artifact.page_no
-                )
+                self._profiles.apply_text_layer_recovery(context.record.doc_id, artifact.page_no)
         except KeyError:
             return

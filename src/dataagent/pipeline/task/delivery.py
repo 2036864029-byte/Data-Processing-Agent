@@ -12,8 +12,9 @@ from dataagent.pipeline.output.formats import to_csv, to_excel, to_json, to_mark
 from dataagent.pipeline.output.reports import DocSummary, PageDetail
 from dataagent.pipeline.repair.fallback import FallbackPath, resolve_fallback
 from dataagent.pipeline.repair.gap import PageGap
+from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.context import DocumentContext
-from dataagent.pipeline.task.models import DocumentOutcome, TaskConfig, TaskStats
+from dataagent.pipeline.task.results import DocumentOutcome, TaskStats
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event
 
@@ -65,9 +66,7 @@ class DocumentDeliveryService:
                     doc_id=doc_id,
                     page_no=page,
                     defect_codes=(),
-                    evidence=(
-                        f"plan_stopped:{stopped_by}" if stopped_by else "unprocessed",
-                    ),
+                    evidence=(f"plan_stopped:{stopped_by}" if stopped_by else "unprocessed",),
                 )
 
         fallback = resolve_fallback(
@@ -108,9 +107,7 @@ class DocumentDeliveryService:
             if page in scope
         }
         document = merge_document(doc_id, artifacts, gaps, qualities=qualities)
-        decision = decide_delivery(
-            document, gap_tolerance=self._config.gap_tolerance
-        )
+        decision = decide_delivery(document, gap_tolerance=self._config.gap_tolerance)
         context.merged = document
         context.delivery = decision
         context.outputs = {
@@ -142,13 +139,13 @@ class DocumentDeliveryService:
             delivery_level=decision.level.value,
         )
         return outcome
+
     def _avg_quality(self, context: DocumentContext, scope: set[int]) -> float:
         values = [
-            report.extract_quality
-            for page, report in context.reports.items()
-            if page in scope
+            report.extract_quality for page, report in context.reports.items() if page in scope
         ]
         return sum(values) / len(values) if values else 0.0
+
     def write_outputs(self, contexts: Sequence[DocumentContext]) -> None:
         self._output_dir.mkdir(parents=True, exist_ok=True)
         for context in contexts:
@@ -158,14 +155,13 @@ class DocumentDeliveryService:
                 if fmt == "json":
                     payload = to_json(context.merged, context.delivery).encode("utf-8")
                 elif fmt == "markdown":
-                    payload = to_markdown(context.merged, context.delivery).encode(
-                        "utf-8"
-                    )
+                    payload = to_markdown(context.merged, context.delivery).encode("utf-8")
                 elif fmt == "csv":
                     payload = to_csv(context.merged, context.delivery).encode("utf-8")
                 else:
                     payload = to_excel(context.merged, context.delivery)
                 Path(target).write_bytes(payload)
+
     def report_inputs(
         self,
         contexts: Sequence[DocumentContext],
@@ -191,9 +187,7 @@ class DocumentDeliveryService:
                     doc_id=context.record.doc_id,
                     page_no=page,
                     extract_quality=(
-                        context.reports[page].extract_quality
-                        if page in context.reports
-                        else 0.0
+                        context.reports[page].extract_quality if page in context.reports else 0.0
                     ),
                     defect_codes=gap.defect_codes,
                     fallback_used=gap.fallback_used,
@@ -201,6 +195,7 @@ class DocumentDeliveryService:
                 for page, gap in sorted(context.gaps.items())
             ]
         return summaries, details
+
     def context_stats(
         self,
         contexts: Sequence[DocumentContext],
@@ -212,9 +207,7 @@ class DocumentDeliveryService:
         processed = sum(len(context.processed) for context in contexts)
         failed = sum(len(context.gaps) for context in contexts)
         quality_values = [
-            report.extract_quality
-            for context in contexts
-            for report in context.reports.values()
+            report.extract_quality for context in contexts for report in context.reports.values()
         ]
         return TaskStats(
             pages_total=total_pages,
@@ -228,6 +221,7 @@ class DocumentDeliveryService:
             duration_s=duration_s,
             stopped_by=stopped_by,
         )
+
     def stats(
         self,
         outcomes: Sequence[DocumentOutcome],
@@ -235,17 +229,11 @@ class DocumentDeliveryService:
         duration_s: float,
         stopped_by: str | None,
     ) -> TaskStats:
-        attempted = [
-            outcome
-            for outcome in outcomes
-            if outcome.status in {"processed", "failed"}
-        ]
+        attempted = [outcome for outcome in outcomes if outcome.status in {"processed", "failed"}]
         processed = sum(outcome.pages for outcome in attempted)
         failed = sum(outcome.gap_pages for outcome in attempted)
         quality_values = [
-            outcome.avg_extract_quality
-            for outcome in attempted
-            if outcome.status == "processed"
+            outcome.avg_extract_quality for outcome in attempted if outcome.status == "processed"
         ]
         return TaskStats(
             pages_total=total_pages,

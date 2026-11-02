@@ -1,41 +1,15 @@
-"""任务编排的数据模型与对外结果契约。
-
-只放纯数据定义，不包含执行逻辑；编排器与阶段服务共享这些模型，
-避免在单个大文件里混杂控制流。
-"""
+"""任务执行结果：统计、单文档结果与任务级结果。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
 
 from dataagent.contracts.errors import DefectCode
-from dataagent.kernel.plan import DecisionRecord, FrozenPlan, PlanResolution
+from dataagent.kernel.plan import DecisionRecord, PlanResolution
 from dataagent.pipeline.ingest.ingestor import PendingRecord
 from dataagent.pipeline.output.delivery import DeliveryLevel
 from dataagent.pipeline.output.reports import ProcessReport
-from dataagent.pipeline.quality.l2_sample import ProfileSpeed
-from dataagent.pipeline.repair.fallback import (
-    EnhancerKind,
-    FallbackConfig,
-    FallbackPath,
-)
-
-DEFAULT_BATCH_PAGES: Final[int] = 32
-DEFAULT_TEXT_AREA_CM2: Final[float] = 468.0
-DEFAULT_FALLBACK: Final[FallbackConfig] = FallbackConfig()
-
-
-@dataclass(frozen=True, slots=True)
-class TaskConfig:
-    output_formats: tuple[str, ...] = ("json", "markdown")
-    batch_pages: int = DEFAULT_BATCH_PAGES
-    text_area_cm2: float = DEFAULT_TEXT_AREA_CM2
-    gap_tolerance: float = 0.05
-    fallback: FallbackConfig = DEFAULT_FALLBACK
-    available_enhancers: frozenset[EnhancerKind] = frozenset()
-    profile_speed: ProfileSpeed = ProfileSpeed.BALANCED
-    plan: FrozenPlan | None = None
+from dataagent.pipeline.repair.fallback import FallbackPath
 
 
 @dataclass(frozen=True, slots=True)

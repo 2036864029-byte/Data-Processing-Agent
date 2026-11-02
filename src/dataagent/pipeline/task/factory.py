@@ -24,7 +24,7 @@ from dataagent.pipeline.route.routes import (
     TwoLevelRouter,
 )
 from dataagent.pipeline.sniff.dispatcher import FormatDispatcher
-from dataagent.pipeline.task.models import TaskConfig
+from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task_runner import TaskRunner
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.plugins.adapters import builtin_plugins

@@ -50,6 +50,7 @@ from dataagent.pipeline.route.routes import (
 )
 from dataagent.pipeline.sniff.dispatcher import FormatDispatcher
 from dataagent.pipeline.sniff.sniffer import Family
+from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.task.control import (
     NoopArtifactWriter,
@@ -59,13 +60,9 @@ from dataagent.pipeline.task.control import (
 from dataagent.pipeline.task.delivery import DocumentDeliveryService
 from dataagent.pipeline.task.extract import ExtractionService
 from dataagent.pipeline.task.intake import IntakeService
-from dataagent.pipeline.task.models import (
-    DocumentOutcome,
-    TaskConfig,
-    TaskOutcome,
-)
 from dataagent.pipeline.task.plan_stage import PlanStageService
 from dataagent.pipeline.task.quality import PageQualityService
+from dataagent.pipeline.task.results import DocumentOutcome, TaskOutcome
 from dataagent.pipeline.task.resume import (
     input_signature,
     load_resume_outcomes,
@@ -192,9 +189,7 @@ class TaskRunner:
             plan_present=self._config.plan is not None,
         )
         self._control.begin(task_id)
-        self._control.record_progress(
-            "running", done=0, total=0, detail={"files": len(paths)}
-        )
+        self._control.record_progress("running", done=0, total=0, detail={"files": len(paths)})
 
         outcomes: dict[str, DocumentOutcome] = {}
         analyzed: list[DocumentContext] = []
@@ -214,10 +209,7 @@ class TaskRunner:
             total_pages = sum(len(context.universe) for context in analyzed)
             if analyzed:
                 self._control.advance(Event.INTEGRITY_OK)
-                if any(
-                    context.routing.family is Family.PDF
-                    for context in analyzed
-                ):
+                if any(context.routing.family is Family.PDF for context in analyzed):
                     self._control.advance(Event.FAMILY_PDF)
                     self._control.advance(Event.ROUTE_READY)
                 else:
@@ -291,15 +283,9 @@ class TaskRunner:
             with span("output", stage="output"):
                 self._delivery.write_outputs(analyzed)
             if analyzed:
-                processed_docs = sum(
-                    1 for item in outcomes.values() if item.status == "processed"
-                )
-                failed_docs = sum(
-                    1 for item in outcomes.values() if item.status == "failed"
-                )
-                gap_pages = sum(
-                    item.gap_pages for item in outcomes.values()
-                )
+                processed_docs = sum(1 for item in outcomes.values() if item.status == "processed")
+                failed_docs = sum(1 for item in outcomes.values() if item.status == "failed")
+                gap_pages = sum(item.gap_pages for item in outcomes.values())
                 for event in self._control.completion_events(
                     processed_docs=processed_docs,
                     failed_docs=failed_docs,
@@ -313,9 +299,7 @@ class TaskRunner:
                 stopped_by,
             )
             summaries, details = self._delivery.report_inputs(analyzed, outcomes)
-            alerts = self._telemetry.finish(
-                task_id, extra={"gap_ratio": stats.gap_ratio}
-            )
+            alerts = self._telemetry.finish(task_id, extra={"gap_ratio": stats.gap_ratio})
             if alerts:
                 log_event(
                     "alerts_triggered",
@@ -332,9 +316,7 @@ class TaskRunner:
                         1 for item in outcomes.values() if item.status == "processed"
                     ),
                     "pending": sum(
-                        1
-                        for item in outcomes.values()
-                        if item.status in {"pending", "rejected"}
+                        1 for item in outcomes.values() if item.status in {"pending", "rejected"}
                     ),
                     "gap_pages": stats.pages_failed,
                     "duration_s": round(stats.duration_s, 3),
@@ -344,9 +326,7 @@ class TaskRunner:
                 "task_finished",
                 task_id=task_id,
                 documents=len(outcomes),
-                processed=sum(
-                    1 for item in outcomes.values() if item.status == "processed"
-                ),
+                processed=sum(1 for item in outcomes.values() if item.status == "processed"),
                 gap_pages=stats.pages_failed,
                 duration_s=round(stats.duration_s, 3),
             )
@@ -377,9 +357,7 @@ class TaskRunner:
         self._reused = {}
         self._duplicates = []
         self._control.begin(task_id)
-        self._control.record_progress(
-            "running", done=0, total=0, detail={"files": 1}
-        )
+        self._control.record_progress("running", done=0, total=0, detail={"files": 1})
         with span("task", task_id=task_id, stage="task"):
             result = self._intake.analyze(Path(path))
             if isinstance(result, DocumentOutcome):
@@ -399,9 +377,7 @@ class TaskRunner:
                 self._control.advance(Event.FAMILY_OTHER)
             self._control.advance(Event.QUEUED)
             requested = [page for page in pages if page in result.universe]
-            self._process_stage(
-                result, requested, self._config.profile_speed.value
-            )
+            self._process_stage(result, requested, self._config.profile_speed.value)
             self._control.advance(Event.PARSE_DONE)
             with span("finalize", doc_id=result.record.doc_id, stage="merge"):
                 outcome = self._delivery.finalize(result, None, only_pages=requested)
@@ -427,14 +403,7 @@ class TaskRunner:
 
     # ── Phase A：接入 / 判定 / 路由 / 画像路由段 ──────────────────────────
 
-
-
-
-
-
     # ── Phase B：Plan 阶段划分与执行 ────────────────────────────────────
-
-
 
     # ── Phase C：单文档页处理 ──────────────────────────────────────────
 
@@ -466,40 +435,10 @@ class TaskRunner:
             page_start=pages[0],
             page_end=pages[-1],
         ):
-            extraction = self._extractor.extract(
-                context, pages, task_id=self._task_id
-            )
+            extraction = self._extractor.extract(context, pages, task_id=self._task_id)
         for artifact in extraction.pages:
             context.artifacts[artifact.page_no] = artifact
             self._extractor.backfill_layout(context, artifact, extraction)
             self._quality.qualify(context, artifact, extraction, strategy)
 
-
-
-
-
-
-
     # ── Phase D：合并 / 交付 / 输出 / 报告 ─────────────────────────────
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

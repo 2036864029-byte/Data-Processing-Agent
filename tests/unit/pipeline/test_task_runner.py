@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from dataagent.kernel.plan import parse_plan
+from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.factory import create_builtin_runner
-from dataagent.pipeline.task.models import TaskConfig
 
 
 def dense_lines(prefix: str, count: int = 60) -> list[str]:

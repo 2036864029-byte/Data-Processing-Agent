@@ -15,7 +15,7 @@ from dataagent.kernel.supervisor import Supervisor
 from dataagent.pipeline.output.delivery import DeliveryLevel
 from dataagent.pipeline.repair.fallback import FallbackPath
 from dataagent.pipeline.task.context import DocumentContext
-from dataagent.pipeline.task.models import DocumentOutcome
+from dataagent.pipeline.task.results import DocumentOutcome
 from dataagent.platform.store.sql.task_state import TaskStateStore
 
 
@@ -42,9 +42,7 @@ def load_resume_outcomes(
     return []
 
 
-def mark_resumed(
-    contexts: Sequence[DocumentContext], stored: Sequence[dict[str, Any]]
-) -> int:
+def mark_resumed(contexts: Sequence[DocumentContext], stored: Sequence[dict[str, Any]]) -> int:
     """把已完成文档标记为已处理，返回可续跑数量。"""
     resumed = 0
     for payload in stored[: len(contexts)]:
@@ -80,16 +78,10 @@ def outcome_to_payload(outcome: DocumentOutcome) -> dict[str, Any]:
         "level": None if outcome.level is None else outcome.level.value,
         "defect_codes": [code.value for code in outcome.defect_codes],
         "outputs": list(outcome.outputs),
-        "fallback_path": (
-            None
-            if outcome.fallback_path is None
-            else outcome.fallback_path.value
-        ),
+        "fallback_path": (None if outcome.fallback_path is None else outcome.fallback_path.value),
         "note": outcome.note,
         "avg_extract_quality": outcome.avg_extract_quality,
-        "failure_counts": [
-            [code.value, count] for code, count in outcome.failure_counts
-        ],
+        "failure_counts": [[code.value, count] for code, count in outcome.failure_counts],
     }
 
 
@@ -104,15 +96,12 @@ def outcome_from_payload(payload: Mapping[str, Any]) -> DocumentOutcome:
         pages=int(payload.get("pages", 0)),
         gap_pages=int(payload.get("gap_pages", 0)),
         level=DeliveryLevel(level) if level else None,
-        defect_codes=tuple(
-            DefectCode(value) for value in payload.get("defect_codes", ())
-        ),
+        defect_codes=tuple(DefectCode(value) for value in payload.get("defect_codes", ())),
         outputs=tuple(str(value) for value in payload.get("outputs", ())),
         fallback_path=FallbackPath(fallback) if fallback else None,
         note=str(payload.get("note", "")),
         avg_extract_quality=float(payload.get("avg_extract_quality", 0.0)),
         failure_counts=tuple(
-            (DefectCode(code), int(count))
-            for code, count in payload.get("failure_counts", ())
+            (DefectCode(code), int(count)) for code, count in payload.get("failure_counts", ())
         ),
     )

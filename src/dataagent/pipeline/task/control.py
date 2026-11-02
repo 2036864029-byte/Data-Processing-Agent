@@ -124,7 +124,5 @@ class TaskControl:
                 error=str(exc),
             )
 
-    def finish(
-        self, extra: Mapping[str, float | int] | None = None
-    ) -> tuple[Alert, ...]:
+    def finish(self, extra: Mapping[str, float | int] | None = None) -> tuple[Alert, ...]:
         return self._telemetry.finish(self._task_id, extra=extra)

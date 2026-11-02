@@ -29,8 +29,8 @@ from dataagent.pipeline.repair.loop import (
 )
 from dataagent.pipeline.repair.operators import OperatorContext
 from dataagent.pipeline.sniff.sniffer import Family
+from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.context import DocumentContext
-from dataagent.pipeline.task.models import TaskConfig
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event, span
 
@@ -54,7 +54,8 @@ def _repair_tier(tier: Tier | None) -> RepairTier | None:
 
 
 class PageQualityService:
-    def __init__(        self,
+    def __init__(
+        self,
         *,
         checker: L1Checker,
         gate: QualityGate,
@@ -74,9 +75,7 @@ class PageQualityService:
         self._telemetry = telemetry
         self._clock = clock
 
-    def mark_unsupported(
-        self, context: DocumentContext, pages: Sequence[int]
-    ) -> None:
+    def mark_unsupported(self, context: DocumentContext, pages: Sequence[int]) -> None:
         """无对应引擎的家族（如图片链路）：直接记为缺口，不静默丢弃。"""
         for page in pages:
             context.gaps[page] = PageGap(
@@ -117,6 +116,7 @@ class PageQualityService:
             latency_ms=(self._clock() - started) * 1000,
             is_complex=is_complex,
         )
+
     def _qualify_page(
         self,
         context: DocumentContext,
@@ -144,9 +144,7 @@ class PageQualityService:
         attempted = bool(defects_for_repair(report))
         repaired = self._repair(context, artifact, page_input, report, strategy)
         if attempted:
-            self._telemetry.record_postprocess(
-                hit=not isinstance(repaired, EnhancementOutcome)
-            )
+            self._telemetry.record_postprocess(hit=not isinstance(repaired, EnhancementOutcome))
         if isinstance(repaired, EnhancementOutcome):
             self._write_gap(context, artifact, report, repaired)
         else:
@@ -156,6 +154,7 @@ class PageQualityService:
             self._gate.run_page(final_input)
             self._write_quality_segment(context, page, final_input, final_report)
         context.processed.add(page)
+
     def _repair(
         self,
         context: DocumentContext,
@@ -179,9 +178,7 @@ class PageQualityService:
             candidate_input = L1PageInput(
                 doc_id=page_input.doc_id,
                 page_no=page_input.page_no,
-                metrics=self._metrics_for(
-                    candidate.markdown, has_table=page_input.has_table
-                ),
+                metrics=self._metrics_for(candidate.markdown, has_table=page_input.has_table),
                 pdf_type=page_input.pdf_type,
                 has_table=page_input.has_table,
                 rotation=page_input.rotation,
@@ -202,9 +199,7 @@ class PageQualityService:
                 doc_id=artifact.doc_id,
                 page_no=artifact.page_no,
                 previous_artifact=(
-                    context.artifacts.get(artifact.page_no - 1)
-                    if artifact.page_no > 1
-                    else None
+                    context.artifacts.get(artifact.page_no - 1) if artifact.page_no > 1 else None
                 ),
             ),
         )
@@ -214,14 +209,13 @@ class PageQualityService:
         final_input = L1PageInput(
             doc_id=page_input.doc_id,
             page_no=page_input.page_no,
-            metrics=self._metrics_for(
-                outcome.artifact.markdown, has_table=page_input.has_table
-            ),
+            metrics=self._metrics_for(outcome.artifact.markdown, has_table=page_input.has_table),
             pdf_type=page_input.pdf_type,
             has_table=page_input.has_table,
             rotation=page_input.rotation,
         )
         return outcome.artifact, final_input, self._checker.check(final_input)
+
     def _write_gap(
         self,
         context: DocumentContext,
@@ -237,9 +231,7 @@ class PageQualityService:
             artifact,
             outcome,
             fallback=fallback.path,
-            recommended_tier=_repair_tier(
-                self._tier_for(context, artifact.page_no, report)
-            ),
+            recommended_tier=_repair_tier(self._tier_for(context, artifact.page_no, report)),
         )
         context.gaps[artifact.page_no] = gap
         log_event(
@@ -250,14 +242,14 @@ class PageQualityService:
             fallback=gap.fallback_used.value,
             tier=None if gap.recommended_tier is None else gap.recommended_tier.value,
         )
-    def _tier_for(
-        self, context: DocumentContext, page_no: int, report: PageReport
-    ) -> Tier | None:
+
+    def _tier_for(self, context: DocumentContext, page_no: int, report: PageReport) -> Tier | None:
         try:
             profile = self._profiles.get(context.record.doc_id, page_no)
         except KeyError:
             return None
         return self._tier_policy.tier(profile, report.extract_quality)
+
     def _write_quality_segment(
         self,
         context: DocumentContext,
@@ -270,9 +262,7 @@ class PageQualityService:
         metrics = page_input.metrics
         signals = ProfileSignals(
             char_density=metrics.char_density or 0.0,
-            glyph_coverage=(
-                metrics.glyph_coverage if metrics.glyph_coverage is not None else 1.0
-            ),
+            glyph_coverage=(metrics.glyph_coverage if metrics.glyph_coverage is not None else 1.0),
             empty_region_ratio=metrics.empty_region_ratio or 0.0,
             header_footer_ratio=metrics.header_footer_leak or 0.0,
         )
@@ -288,6 +278,7 @@ class PageQualityService:
             )
         except KeyError:
             return
+
     def _page_input(
         self,
         context: DocumentContext,
@@ -295,9 +286,7 @@ class PageQualityService:
         extraction: ExtractionResult,
     ) -> L1PageInput:
         try:
-            pdf_type = self._profiles.get(
-                context.record.doc_id, artifact.page_no
-            ).pdf_type
+            pdf_type = self._profiles.get(context.record.doc_id, artifact.page_no).pdf_type
         except KeyError:
             pdf_type = PdfType.TEXT_BASED
         has_table = artifact.page_no in extraction.pages_with_tables
@@ -308,10 +297,9 @@ class PageQualityService:
             pdf_type=pdf_type,
             has_table=has_table,
         )
+
     def _metrics_for(self, markdown: str, *, has_table: bool) -> L1Metrics:
-        metrics = L1Metrics.from_text(
-            markdown, text_area=self._config.text_area_cm2
-        )
+        metrics = L1Metrics.from_text(markdown, text_area=self._config.text_area_cm2)
         if not has_table:
             return metrics
         table = table_page_metrics(markdown)

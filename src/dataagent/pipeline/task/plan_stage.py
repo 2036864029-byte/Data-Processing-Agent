@@ -19,7 +19,7 @@ from dataagent.kernel.plan import (
     StageExecution,
 )
 from dataagent.pipeline.task.context import DocumentContext
-from dataagent.pipeline.task.models import TaskStats
+from dataagent.pipeline.task.results import TaskStats
 
 ProcessStage = Callable[[DocumentContext, Sequence[int], str], None]
 ContextStats = Callable[[Sequence[DocumentContext], int], TaskStats]
@@ -46,9 +46,7 @@ class PlanStageService:
         self._process_stage = process_stage
         self._context_stats = context_stats
 
-    def execute(
-        self, contexts: Sequence[DocumentContext], total_pages: int
-    ) -> PlanExecution:
+    def execute(self, contexts: Sequence[DocumentContext], total_pages: int) -> PlanExecution:
         if self._plan is None:
             self._run_stage(contexts, None, total_pages, self._default_strategy)
             return PlanExecution(None, (), None)
@@ -56,33 +54,23 @@ class PlanStageService:
         plan = self._plan
         probe_stages = _probe_stages(plan)
         for stage in probe_stages:
-            self._run_stage(
-                contexts, stage, total_pages, stage.strategy or "balanced"
-            )
+            self._run_stage(contexts, stage, total_pages, stage.strategy or "balanced")
 
-        if not any(
-            stage.kind is not StageKind.PROCESSING for stage in plan.spec.stages
-        ):
+        if not any(stage.kind is not StageKind.PROCESSING for stage in plan.spec.stages):
             for stage in plan.spec.stages[len(probe_stages) :]:
-                self._run_stage(
-                    contexts, stage, total_pages, stage.strategy or "balanced"
-                )
+                self._run_stage(contexts, stage, total_pages, stage.strategy or "balanced")
             stages = tuple(
                 StageExecution(stage)
                 for stage in plan.spec.stages
                 if stage.kind is StageKind.PROCESSING
             )
-            return PlanExecution(
-                PlanResolution(stages=stages, decisions=()), (), None
-            )
+            return PlanExecution(PlanResolution(stages=stages, decisions=()), (), None)
 
         stats = self._context_stats(contexts, total_pages)
         try:
             resolution = PlanExecutor(plan).resolve(stats.as_plan_stats())
         except PlanGuardExceeded as exc:
-            return PlanExecution(
-                exc.partial, exc.partial.decisions, exc.guard
-            )
+            return PlanExecution(exc.partial, exc.partial.decisions, exc.guard)
 
         executed = {stage.id for stage in probe_stages}
         for execution in resolution.stages:

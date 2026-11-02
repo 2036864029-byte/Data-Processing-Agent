@@ -8,8 +8,8 @@ from pathlib import Path
 from dataagent.kernel.state import State
 from dataagent.kernel.supervisor import InMemoryProgressRepository
 from dataagent.pipeline.repair.fallback import FallbackConfig, FallbackPath
+from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.factory import create_builtin_runner
-from dataagent.pipeline.task.models import TaskConfig
 
 
 def dense_lines(prefix: str, count: int = 60) -> list[str]:

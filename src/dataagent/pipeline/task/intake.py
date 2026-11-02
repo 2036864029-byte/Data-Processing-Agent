@@ -18,7 +18,7 @@ from dataagent.pipeline.route.routes import TwoLevelRouter
 from dataagent.pipeline.sniff.dispatcher import DispatchAction, FormatDispatcher
 from dataagent.pipeline.sniff.sniffer import Family, sniff_file
 from dataagent.pipeline.task.context import DocumentContext
-from dataagent.pipeline.task.models import DocumentOutcome
+from dataagent.pipeline.task.results import DocumentOutcome
 from dataagent.pipeline.telemetry import TaskTelemetry
 
 
@@ -82,18 +82,14 @@ class IntakeService:
             )
 
         if ingested.outcome is IngestOutcome.DUPLICATE:
-            return self._duplicate_outcome(
-                path, ingested.document.doc_id, in_flight or {}
-            )
+            return self._duplicate_outcome(path, ingested.document.doc_id, in_flight or {})
 
         record = ingested.document
         document_path = Path(record.path)
         sniff = sniff_file(document_path)
         dispatch = self._dispatcher.dispatch(record.doc_id, document_path, sniff)
         if dispatch.action is not DispatchAction.ROUTE:
-            reason = (
-                dispatch.pending.reason if dispatch.pending is not None else "pending"
-            )
+            reason = dispatch.pending.reason if dispatch.pending is not None else "pending"
             self._audit(
                 record.doc_id,
                 str(document_path),
@@ -108,16 +104,12 @@ class IntakeService:
                 note=reason,
             )
 
-        routing = self._router.route(
-            doc_id=record.doc_id, path=document_path, sniff=sniff
-        )
+        routing = self._router.route(doc_id=record.doc_id, path=document_path, sniff=sniff)
         if routing.family is Family.PDF:
             for decision in routing.page_decisions:
                 self._profiles.write_route(decision)
             page_count = (
-                routing.classification.page_count
-                if routing.classification is not None
-                else 0
+                routing.classification.page_count if routing.classification is not None else 0
             )
             universe = tuple(range(1, page_count + 1))
         else:
@@ -168,9 +160,5 @@ class IntakeService:
             note="内容哈希重复，已有记录（本次未处理）",
         )
 
-    def _audit(
-        self, doc_id: str, path: str, *, status: str, family: str
-    ) -> None:
-        self._telemetry.record_ingest(
-            doc_id=doc_id, path=path, status=status, family=family
-        )
+    def _audit(self, doc_id: str, path: str, *, status: str, family: str) -> None:
+        self._telemetry.record_ingest(doc_id=doc_id, path=path, status=status, family=family)

@@ -25,11 +25,9 @@ sys.path.insert(0, str(ROOT / "tests" / "eval"))
 from construct import PageSpec, build_pdf  # noqa: E402
 
 from dataagent.kernel.plan import parse_plan  # noqa: E402
+from dataagent.pipeline.task.config import TaskConfig  # noqa: E402
 from dataagent.pipeline.task.factory import create_builtin_runner  # noqa: E402
-from dataagent.pipeline.task.models import (  # noqa: E402
-    TaskConfig,
-    TaskOutcome,
-)
+from dataagent.pipeline.task.results import TaskOutcome  # noqa: E402
 from dataagent.platform.rules.rulepack import (  # noqa: E402
     CheckType,
     RuleCheck,
