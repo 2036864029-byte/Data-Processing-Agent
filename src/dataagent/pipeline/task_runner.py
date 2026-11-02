@@ -17,6 +17,7 @@ P0 口径说明：
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -113,6 +114,12 @@ from dataagent.pipeline.sniff.dispatcher import DispatchAction, FormatDispatcher
 from dataagent.pipeline.sniff.sniffer import Family, SniffResult, sniff_file
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event, span
+from dataagent.platform.store.sql.engine import Database
+from dataagent.platform.store.sql.task_state import (
+    InMemoryTaskStateStore,
+    SqlTaskStateStore,
+    TaskStateStore,
+)
 from dataagent.platform.store.sql.tasks import TaskProgress, TaskProgressStore
 
 DEFAULT_BATCH_PAGES: Final[int] = 32
@@ -193,6 +200,8 @@ class DocumentOutcome:
     outputs: tuple[str, ...] = ()
     fallback_path: FallbackPath | None = None
     note: str = ""
+    avg_extract_quality: float = 0.0
+    failure_counts: tuple[tuple[DefectCode, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +255,7 @@ class TaskRunner:
         progress: TaskProgressStore | None = None,
         supervisor: Supervisor | None = None,
         state_repository: ProgressRepository | None = None,
+        state_store: TaskStateStore | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._ingestor = ingestor
@@ -264,10 +274,18 @@ class TaskRunner:
         self._pending = pending
         self._telemetry = telemetry if telemetry is not None else TaskTelemetry()
         self._progress = progress
+        if state_store is None and isinstance(state_repository, TaskStateStore):
+            state_store = state_repository
+        if state_store is None and state_repository is None:
+            state_store = InMemoryTaskStateStore()
+        self._state_store = state_store
+        repository: ProgressRepository | None = (
+            state_store if state_store is not None else state_repository
+        )
         self._supervisor = supervisor or Supervisor(
             executor=_NoopBatchExecutor(),
             artifacts=_NoopArtifactWriter(),
-            repository=state_repository or InMemoryProgressRepository(),
+            repository=repository or InMemoryProgressRepository(),
         )
         self._state = State.RECEIVED
         self._clock = clock
@@ -281,12 +299,26 @@ class TaskRunner:
         paths: Sequence[Path | str],
         *,
         task_id: str = "task-local",
+        resume: bool = True,
     ) -> TaskOutcome:
         started = self._clock()
         self._task_id = task_id
         self._reused = {}
         self._contexts = {}
         self._telemetry.reset()
+        ordered_paths = sorted((Path(path) for path in paths), key=str)
+        signature = _input_signature(ordered_paths)
+        stored: list[dict[str, Any]] = []
+        if self._state_store is not None:
+            if (
+                resume
+                and self._config.plan is None
+                and self._state_store.input_signature(task_id) == signature
+            ):
+                stored = self._state_store.outcomes(task_id)
+            else:
+                self._state_store.reset_outcomes(task_id)
+                self._state_store.set_input_signature(task_id, signature)
         self._state = self._supervisor.begin_task(task_id)
         self._record_progress(
             "running", done=0, total=0, detail={"files": len(paths)}
@@ -299,12 +331,20 @@ class TaskRunner:
         with span("task", task_id=task_id, stage="task"):
             log_event("task_started", task_id=task_id, files=len(paths))
             with span("intake", stage="ingest"):
-                for path in paths:
-                    result = self._analyze(Path(path))
+                for path in ordered_paths:
+                    result = self._analyze(path)
                     if isinstance(result, DocumentOutcome):
                         outcomes[result.path] = result
                         continue
                     analyzed.append(result)
+
+            resumed = 0
+            for payload in stored[: len(analyzed)]:
+                if not payload:
+                    break
+                resumed += 1
+            for context in analyzed[:resumed]:
+                context.processed.update(context.universe)
 
             total_pages = sum(len(context.universe) for context in analyzed)
             if analyzed:
@@ -333,22 +373,31 @@ class TaskRunner:
                 self._advance(task_id, Event.PARSE_DONE)
 
             done_pages = 0
-            for index, context in enumerate(analyzed, start=1):
-                with span(
-                    "finalize",
-                    doc_id=context.record.doc_id,
-                    stage="merge",
-                ):
-                    outcomes[context.record.path] = self._finalize(
-                        context, stopped_by
-                    )
+            for index, context in enumerate(analyzed):
+                if index < resumed:
+                    restored = _outcome_from_payload(stored[index])
+                    outcomes[context.record.path] = restored
+                    self._reused[restored.doc_id] = restored
+                else:
+                    with span(
+                        "finalize",
+                        doc_id=context.record.doc_id,
+                        stage="merge",
+                    ):
+                        outcome = self._finalize(context, stopped_by)
+                    outcomes[context.record.path] = outcome
+                    if self._state_store is not None:
+                        self._state_store.save_outcome(
+                            task_id, index, _outcome_to_payload(outcome)
+                        )
+                        self._supervisor.commit_batch(task_id, index)
                 done_pages += len(context.universe)
                 self._record_progress(
                     "running",
                     done=done_pages,
                     total=total_pages,
                     detail={
-                        "documents_done": index,
+                        "documents_done": index + 1,
                         "documents_total": len(analyzed),
                     },
                 )
@@ -389,9 +438,12 @@ class TaskRunner:
                 ):
                     self._advance(task_id, event)
             stats = self._stats(
-                analyzed, total_pages, self._clock() - started, stopped_by
+                list(outcomes.values()),
+                total_pages,
+                self._clock() - started,
+                stopped_by,
             )
-            summaries, details = self._report_inputs(analyzed)
+            summaries, details = self._report_inputs(analyzed, outcomes)
             alerts = self._telemetry.finish(
                 task_id, extra={"gap_ratio": stats.gap_ratio}
             )
@@ -733,7 +785,7 @@ class TaskRunner:
             return PlanResolution(stages=stages, decisions=()), (), None
 
         executor = PlanExecutor(plan)
-        stats = self._stats(contexts, total_pages, 0.0, None)
+        stats = self._context_stats(contexts, total_pages, 0.0, None)
         try:
             resolution = executor.resolve(stats.as_plan_stats())
         except PlanGuardExceeded as exc:
@@ -1130,6 +1182,8 @@ class TaskRunner:
                 defect_codes=_gap_codes(gaps),
                 fallback_path=fallback.path,
                 note=fallback.reason,
+                avg_extract_quality=self._avg_quality(context, scope),
+                failure_counts=_failure_counts(context),
             )
 
         artifacts = [
@@ -1165,6 +1219,8 @@ class TaskRunner:
             outputs=tuple(context.outputs.values()),
             fallback_path=fallback.path if gaps else None,
             note=decision.report_note,
+            avg_extract_quality=self._avg_quality(context, scope),
+            failure_counts=_failure_counts(context),
         )
         self._reused[doc_id] = outcome
         self._telemetry.record_document(stp=not document.gap_pages)
@@ -1176,6 +1232,14 @@ class TaskRunner:
             delivery_level=decision.level.value,
         )
         return outcome
+
+    def _avg_quality(self, context: _DocContext, scope: set[int]) -> float:
+        values = [
+            report.extract_quality
+            for page, report in context.reports.items()
+            if page in scope
+        ]
+        return sum(values) / len(values) if values else 0.0
 
     def _write_outputs(self, contexts: Sequence[_DocContext]) -> None:
         self._output_dir.mkdir(parents=True, exist_ok=True)
@@ -1196,52 +1260,87 @@ class TaskRunner:
                 Path(target).write_bytes(payload)
 
     def _report_inputs(
-        self, contexts: Sequence[_DocContext]
+        self,
+        contexts: Sequence[_DocContext],
+        outcomes: Mapping[str, DocumentOutcome],
     ) -> tuple[list[DocSummary], dict[str, list[PageDetail]]]:
-        summaries: list[DocSummary] = []
+        summaries = [
+            DocSummary(
+                doc_id=outcome.doc_id,
+                pages=outcome.pages,
+                gap_pages=outcome.gap_pages,
+                level=outcome.level or DeliveryLevel.COMPLETE,
+                failure_counts=outcome.failure_counts,
+            )
+            for outcome in outcomes.values()
+            if outcome.status == "processed"
+        ]
         details: dict[str, list[PageDetail]] = {}
         for context in contexts:
-            if context.merged is None or context.delivery is None:
+            if not context.gaps:
                 continue
-            summaries.append(
-                DocSummary(
+            details[context.record.doc_id] = [
+                PageDetail(
                     doc_id=context.record.doc_id,
-                    pages=len(context.merged.pages),
-                    gap_pages=len(context.merged.gap_pages),
-                    level=context.delivery.level,
-                    failure_counts=_failure_counts(context),
+                    page_no=page,
+                    extract_quality=(
+                        context.reports[page].extract_quality
+                        if page in context.reports
+                        else 0.0
+                    ),
+                    defect_codes=gap.defect_codes,
+                    fallback_used=gap.fallback_used,
                 )
-            )
-            if context.gaps:
-                details[context.record.doc_id] = [
-                    PageDetail(
-                        doc_id=context.record.doc_id,
-                        page_no=page,
-                        extract_quality=(
-                            context.reports[page].extract_quality
-                            if page in context.reports
-                            else 0.0
-                        ),
-                        defect_codes=gap.defect_codes,
-                        fallback_used=gap.fallback_used,
-                    )
-                    for page, gap in sorted(context.gaps.items())
-                ]
+                for page, gap in sorted(context.gaps.items())
+            ]
         return summaries, details
 
-    def _stats(
+    def _context_stats(
         self,
         contexts: Sequence[_DocContext],
         total_pages: int,
         duration_s: float,
         stopped_by: str | None,
     ) -> TaskStats:
+        """执行期统计（按上下文；用于 Plan 分支求值）。"""
         processed = sum(len(context.processed) for context in contexts)
         failed = sum(len(context.gaps) for context in contexts)
         quality_values = [
             report.extract_quality
             for context in contexts
             for report in context.reports.values()
+        ]
+        return TaskStats(
+            pages_total=total_pages,
+            pages_processed=processed,
+            pages_failed=failed,
+            stp_rate=(processed - failed) / processed if processed else 0.0,
+            gap_ratio=failed / processed if processed else 0.0,
+            avg_extract_quality=(
+                sum(quality_values) / len(quality_values) if quality_values else 0.0
+            ),
+            duration_s=duration_s,
+            stopped_by=stopped_by,
+        )
+
+    def _stats(
+        self,
+        outcomes: Sequence[DocumentOutcome],
+        total_pages: int,
+        duration_s: float,
+        stopped_by: str | None,
+    ) -> TaskStats:
+        attempted = [
+            outcome
+            for outcome in outcomes
+            if outcome.status in {"processed", "failed"}
+        ]
+        processed = sum(outcome.pages for outcome in attempted)
+        failed = sum(outcome.gap_pages for outcome in attempted)
+        quality_values = [
+            outcome.avg_extract_quality
+            for outcome in attempted
+            if outcome.status == "processed"
         ]
         return TaskStats(
             pages_total=total_pages,
@@ -1326,6 +1425,60 @@ def _failure_counts(context: _DocContext) -> tuple[tuple[DefectCode, int], ...]:
     return tuple(sorted(counts.items(), key=lambda item: item[0].value))
 
 
+def _input_signature(paths: Sequence[Path]) -> str:
+    joined = "\n".join(str(path) for path in paths)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def _outcome_to_payload(outcome: DocumentOutcome) -> dict[str, Any]:
+    return {
+        "doc_id": outcome.doc_id,
+        "path": outcome.path,
+        "family": outcome.family,
+        "status": outcome.status,
+        "pages": outcome.pages,
+        "gap_pages": outcome.gap_pages,
+        "level": None if outcome.level is None else outcome.level.value,
+        "defect_codes": [code.value for code in outcome.defect_codes],
+        "outputs": list(outcome.outputs),
+        "fallback_path": (
+            None
+            if outcome.fallback_path is None
+            else outcome.fallback_path.value
+        ),
+        "note": outcome.note,
+        "avg_extract_quality": outcome.avg_extract_quality,
+        "failure_counts": [
+            [code.value, count] for code, count in outcome.failure_counts
+        ],
+    }
+
+
+def _outcome_from_payload(payload: Mapping[str, Any]) -> DocumentOutcome:
+    level = payload.get("level")
+    fallback = payload.get("fallback_path")
+    return DocumentOutcome(
+        doc_id=str(payload["doc_id"]),
+        path=str(payload["path"]),
+        family=str(payload["family"]),
+        status=str(payload["status"]),
+        pages=int(payload.get("pages", 0)),
+        gap_pages=int(payload.get("gap_pages", 0)),
+        level=DeliveryLevel(level) if level else None,
+        defect_codes=tuple(
+            DefectCode(value) for value in payload.get("defect_codes", ())
+        ),
+        outputs=tuple(str(value) for value in payload.get("outputs", ())),
+        fallback_path=FallbackPath(fallback) if fallback else None,
+        note=str(payload.get("note", "")),
+        avg_extract_quality=float(payload.get("avg_extract_quality", 0.0)),
+        failure_counts=tuple(
+            (DefectCode(code), int(count))
+            for code, count in payload.get("failure_counts", ())
+        ),
+    )
+
+
 def create_builtin_runner(
     *,
     pending: PendingQueue | None = None,
@@ -1335,7 +1488,12 @@ def create_builtin_runner(
     progress: TaskProgressStore | None = None,
     supervisor: Supervisor | None = None,
     state_repository: ProgressRepository | None = None,
+    state_store: TaskStateStore | None = None,
+    database: Database | None = None,
 ) -> TaskRunner:
+    """构造内置引擎 runner；传入 database 时状态与续跑点落 PG。"""
+    if state_store is None and database is not None:
+        state_store = SqlTaskStateStore(database)
     """构造内置引擎的 runner（真实 PDF / CSV / TXT 链路，测试与 CLI 共用）。"""
     from dataagent.pipeline.ingest.ingestor import (
         InMemoryDocumentStore,
@@ -1369,4 +1527,5 @@ def create_builtin_runner(
         progress=progress,
         supervisor=supervisor,
         state_repository=state_repository,
+        state_store=state_store,
     )

@@ -177,6 +177,10 @@ class Supervisor:
         self._repository.save_state(task_id, State.RECEIVED)
         return State.RECEIVED
 
+    def commit_batch(self, task_id: str, batch_index: int) -> None:
+        """提交完成批 / 文档的续跑点（已完成部分 0 重做）。"""
+        self._repository.commit_batch(task_id, batch_index)
+
     def run_batches(
         self, context: TaskRunContext, batches: Sequence[Batch]
     ) -> RunReport:

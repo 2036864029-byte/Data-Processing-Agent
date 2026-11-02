@@ -92,6 +92,9 @@
     `RECEIVED → SNIFFED/CLASSIFIED → ROUTED → PARSING → PARSED →
     POSTPROCESS → L1/L2 → MERGED → L3 → PUBLISHED`；全失败 → `ESCALATED`，
     无可用文档 → `REJECTED`。进度 detail 携带 `machine_state`
+  - 状态与续跑落 PG：迁移 `0008_task_state` 保存状态机状态、resume_point、
+    输入签名与已完成文档结果；相同输入重跑跳过已完成文档（0 重做），
+    输入集合变化则整体重跑；带 Plan 的任务暂不续跑（重规划语义待接）
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算
