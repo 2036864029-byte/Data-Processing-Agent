@@ -19,7 +19,8 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # 不得禁用应用已有 logger（dataagent 结构化日志）
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # SQLAlchemy Core（禁 ORM）：无 model 元数据，DDL 一律手写迁移
 target_metadata = None

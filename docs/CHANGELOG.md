@@ -76,6 +76,11 @@
   - 跨页表续页表头恢复：仅当上一页表格触底、当前页表格位于页首且列数一致时，
     沿用上一页表头；缺上下文不猜测。`OperatorContext` 新增 `previous_artifact`，
     `run_enhancement` 支持注入算子上下文
+  - TaskRunner 全链路观测：任务 → 接入 → 抽取 → 质检 → 合并 → 输出的 span 链；
+    任务结束发指标快照（处理量 / STP / 档位分布 / p50·p95 / 复杂页占比）、
+    接入审计（`AuditAction.INGEST`）与告警评估（告警走旁路 sink）
+  - `configure_logging` 显式重新启用 logger；Alembic `fileConfig` 改为
+    `disable_existing_loggers=False`，迁移不再吞掉应用日志
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算

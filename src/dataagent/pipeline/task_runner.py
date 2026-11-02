@@ -103,6 +103,8 @@ from dataagent.pipeline.route.routes import (
 )
 from dataagent.pipeline.sniff.dispatcher import DispatchAction, FormatDispatcher
 from dataagent.pipeline.sniff.sniffer import Family, SniffResult, sniff_file
+from dataagent.pipeline.telemetry import TaskTelemetry
+from dataagent.platform.observe.log import log_event, span
 
 DEFAULT_BATCH_PAGES: Final[int] = 32
 # P0 字符密度口径：A4 版心近似面积（cm²）；P1 由真实 bbox 替换
@@ -230,6 +232,7 @@ class TaskRunner:
         quality_store: QualityResultStore | None = None,
         tier_policy: RuleTierPolicy | None = None,
         pending: PendingQueue | None = None,
+        telemetry: TaskTelemetry | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._ingestor = ingestor
@@ -246,6 +249,7 @@ class TaskRunner:
         self._gate = QualityGate(checker=self._checker, store=self._quality_store)
         self._tier_policy = tier_policy if tier_policy is not None else RuleTierPolicy()
         self._pending = pending
+        self._telemetry = telemetry if telemetry is not None else TaskTelemetry()
         self._clock = clock
         self._task_id = "task-local"
         self._reused: dict[str, DocumentOutcome] = {}
@@ -262,46 +266,80 @@ class TaskRunner:
         self._task_id = task_id
         self._reused = {}
         self._contexts = {}
+        self._telemetry.reset()
 
         outcomes: dict[str, DocumentOutcome] = {}
         analyzed: list[_DocContext] = []
         self._duplicates = []
 
-        for path in paths:
-            result = self._analyze(Path(path))
-            if isinstance(result, DocumentOutcome):
-                outcomes[result.path] = result
-                continue
-            analyzed.append(result)
+        with span("task", task_id=task_id, stage="task"):
+            log_event("task_started", task_id=task_id, files=len(paths))
+            with span("intake", stage="ingest"):
+                for path in paths:
+                    result = self._analyze(Path(path))
+                    if isinstance(result, DocumentOutcome):
+                        outcomes[result.path] = result
+                        continue
+                    analyzed.append(result)
 
-        total_pages = sum(len(context.universe) for context in analyzed)
-        resolution, decisions, stopped_by = self._execute_plan(analyzed, total_pages)
+            total_pages = sum(len(context.universe) for context in analyzed)
+            resolution, decisions, stopped_by = self._execute_plan(
+                analyzed, total_pages
+            )
 
-        for context in analyzed:
-            outcomes[context.record.path] = self._finalize(context, stopped_by)
+            for context in analyzed:
+                with span(
+                    "finalize",
+                    doc_id=context.record.doc_id,
+                    stage="merge",
+                ):
+                    outcomes[context.record.path] = self._finalize(
+                        context, stopped_by
+                    )
 
-        # 同内容文件在分析阶段先于原件完成：此时原件结果已落定，回填复用结果
-        for duplicate_path, doc_id in self._duplicates:
-            reused = self._reused.get(doc_id)
-            if reused is not None:
-                outcomes[duplicate_path] = DocumentOutcome(
-                    doc_id=reused.doc_id,
-                    path=duplicate_path,
-                    family=reused.family,
-                    status="duplicate",
-                    pages=reused.pages,
-                    gap_pages=reused.gap_pages,
-                    level=reused.level,
-                    defect_codes=reused.defect_codes,
-                    outputs=reused.outputs,
-                    note="内容哈希重复，复用已有结果",
+            # 同内容文件在分析阶段先于原件完成：此时原件结果已落定，回填复用结果
+            for duplicate_path, doc_id in self._duplicates:
+                reused = self._reused.get(doc_id)
+                if reused is not None:
+                    outcomes[duplicate_path] = DocumentOutcome(
+                        doc_id=reused.doc_id,
+                        path=duplicate_path,
+                        family=reused.family,
+                        status="duplicate",
+                        pages=reused.pages,
+                        gap_pages=reused.gap_pages,
+                        level=reused.level,
+                        defect_codes=reused.defect_codes,
+                        outputs=reused.outputs,
+                        note="内容哈希重复，复用已有结果",
+                    )
+
+            with span("output", stage="output"):
+                self._write_outputs(analyzed)
+            stats = self._stats(
+                analyzed, total_pages, self._clock() - started, stopped_by
+            )
+            summaries, details = self._report_inputs(analyzed)
+            alerts = self._telemetry.finish(
+                task_id, extra={"gap_ratio": stats.gap_ratio}
+            )
+            if alerts:
+                log_event(
+                    "alerts_triggered",
+                    task_id=task_id,
+                    count=len(alerts),
+                    kinds=[alert.kind.value for alert in alerts],
                 )
-
-        self._write_outputs(analyzed)
-        stats = self._stats(
-            analyzed, total_pages, self._clock() - started, stopped_by
-        )
-        summaries, details = self._report_inputs(analyzed)
+            log_event(
+                "task_finished",
+                task_id=task_id,
+                documents=len(outcomes),
+                processed=sum(
+                    1 for item in outcomes.values() if item.status == "processed"
+                ),
+                gap_pages=stats.pages_failed,
+                duration_s=round(stats.duration_s, 3),
+            )
 
         return TaskOutcome(
             documents=tuple(outcomes.values()),
@@ -328,22 +366,33 @@ class TaskRunner:
         self._reused = {}
         self._contexts = {}
         self._duplicates = []
-        result = self._analyze(Path(path))
-        if isinstance(result, DocumentOutcome):
-            return result
-        requested = [page for page in pages if page in result.universe]
-        self._process_stage(
-            result, requested, self._config.profile_speed.value
-        )
-        outcome = self._finalize(result, None, only_pages=requested)
-        self._write_outputs([result])
-        return outcome
+        self._telemetry.reset()
+        with span("task", task_id=task_id, stage="task"):
+            result = self._analyze(Path(path))
+            if isinstance(result, DocumentOutcome):
+                return result
+            requested = [page for page in pages if page in result.universe]
+            self._process_stage(
+                result, requested, self._config.profile_speed.value
+            )
+            with span("finalize", doc_id=result.record.doc_id, stage="merge"):
+                outcome = self._finalize(result, None, only_pages=requested)
+            with span("output", stage="output"):
+                self._write_outputs([result])
+            self._telemetry.finish(task_id)
+            return outcome
 
     # ── Phase A：接入 / 判定 / 路由 / 画像路由段 ──────────────────────────
 
     def _analyze(self, path: Path) -> _DocContext | DocumentOutcome:
         ingested = self._ingestor.ingest_path(path)
         if ingested.outcome is IngestOutcome.REJECTED:
+            self._audit_ingest(
+                ingested.document.doc_id,
+                ingested.document.path,
+                status="rejected",
+                family="unknown",
+            )
             return DocumentOutcome(
                 doc_id=ingested.document.doc_id,
                 path=ingested.document.path,
@@ -355,6 +404,12 @@ class TaskRunner:
             in_flight = self._contexts.get(ingested.document.doc_id)
             if in_flight is not None:
                 self._duplicates.append((str(path), ingested.document.doc_id))
+                self._audit_ingest(
+                    ingested.document.doc_id,
+                    str(path),
+                    status="duplicate",
+                    family=in_flight.routing.family.value,
+                )
                 return DocumentOutcome(
                     doc_id=ingested.document.doc_id,
                     path=str(path),
@@ -364,6 +419,12 @@ class TaskRunner:
                 )
             reused = self._reused.get(ingested.document.doc_id)
             if reused is None:
+                self._audit_ingest(
+                    ingested.document.doc_id,
+                    str(path),
+                    status="duplicate",
+                    family="unknown",
+                )
                 return DocumentOutcome(
                     doc_id=ingested.document.doc_id,
                     path=str(path),
@@ -371,6 +432,9 @@ class TaskRunner:
                     status="duplicate",
                     note="内容哈希重复，已有记录（本次未处理）",
                 )
+            self._audit_ingest(
+                reused.doc_id, str(path), status="duplicate", family=reused.family
+            )
             return DocumentOutcome(
                 doc_id=reused.doc_id,
                 path=str(path),
@@ -390,6 +454,12 @@ class TaskRunner:
         dispatch = self._dispatcher.dispatch(record.doc_id, document_path, sniff)
         if dispatch.action is not DispatchAction.ROUTE:
             reason = dispatch.pending.reason if dispatch.pending is not None else "pending"
+            self._audit_ingest(
+                record.doc_id,
+                str(document_path),
+                status="pending",
+                family=dispatch.family.value,
+            )
             return DocumentOutcome(
                 doc_id=record.doc_id,
                 path=str(document_path),
@@ -420,7 +490,20 @@ class TaskRunner:
             universe=universe,
         )
         self._contexts[record.doc_id] = context
+        self._audit_ingest(
+            record.doc_id,
+            str(document_path),
+            status=ingested.outcome.value,
+            family=routing.family.value,
+        )
         return context
+
+    def _audit_ingest(
+        self, doc_id: str, path: str, *, status: str, family: str
+    ) -> None:
+        self._telemetry.record_ingest(
+            doc_id=doc_id, path=path, status=status, family=family
+        )
 
     # ── Phase B：Plan 阶段划分与执行 ────────────────────────────────────
 
@@ -516,11 +599,18 @@ class TaskRunner:
             return
 
         payload: dict[str, Any] = {"path": str(context.path), "pages": list(pages)}
-        raw = self._registry.invoke(
-            capability,
-            payload,
-            PluginContext(task_id=self._task_id, doc_id=context.record.doc_id),
-        )
+        with span(
+            "extract",
+            doc_id=context.record.doc_id,
+            stage="extract",
+            page_start=pages[0],
+            page_end=pages[-1],
+        ):
+            raw = self._registry.invoke(
+                capability,
+                payload,
+                PluginContext(task_id=self._task_id, doc_id=context.record.doc_id),
+            )
         extraction = ExtractionResult.model_validate(raw)
         for artifact in extraction.pages:
             context.artifacts[artifact.page_no] = artifact
@@ -560,6 +650,37 @@ class TaskRunner:
         strategy: str,
     ) -> None:
         page = artifact.page_no
+        started = self._clock()
+        with span(
+            "quality",
+            doc_id=context.record.doc_id,
+            page_no=page,
+            stage="quality",
+        ):
+            self._qualify_page(context, artifact, extraction, strategy)
+        report = context.reports.get(page)
+        tier = Tier.T0
+        if report is not None:
+            tier = self._tier_for(context, page, report) or Tier.T0
+        is_complex = (
+            page in extraction.pages_with_tables
+            or page in extraction.pages_with_columns
+            or extraction.is_complex
+        )
+        self._telemetry.record_page(
+            tier=tier,
+            latency_ms=(self._clock() - started) * 1000,
+            is_complex=is_complex,
+        )
+
+    def _qualify_page(
+        self,
+        context: _DocContext,
+        artifact: PageArtifact,
+        extraction: ExtractionResult,
+        strategy: str,
+    ) -> None:
+        page = artifact.page_no
         if context.routing.family is not Family.PDF:
             report = _synthetic_pass_report(context.record.doc_id, page)
             self._quality_store.save(report)
@@ -576,7 +697,12 @@ class TaskRunner:
             context.processed.add(page)
             return
 
+        attempted = bool(defects_for_repair(report))
         repaired = self._repair(context, artifact, page_input, report, strategy)
+        if attempted:
+            self._telemetry.record_postprocess(
+                hit=not isinstance(repaired, EnhancementOutcome)
+            )
         if isinstance(repaired, EnhancementOutcome):
             self._write_gap(context, artifact, report, repaired)
         else:
@@ -674,6 +800,14 @@ class TaskRunner:
             ),
         )
         context.gaps[artifact.page_no] = gap
+        log_event(
+            "page_gap",
+            doc_id=artifact.doc_id,
+            page_no=artifact.page_no,
+            defect_codes=[code.value for code in gap.defect_codes],
+            fallback=gap.fallback_used.value,
+            tier=None if gap.recommended_tier is None else gap.recommended_tier.value,
+        )
 
     def _tier_for(
         self, context: _DocContext, page_no: int, report: PageReport
@@ -784,6 +918,13 @@ class TaskRunner:
         )
         gaps = [context.gaps[page] for page in sorted(context.gaps) if page in scope]
         if fallback.path is FallbackPath.FAIL_DOC and gaps:
+            self._telemetry.record_document(stp=False)
+            log_event(
+                "document_failed",
+                doc_id=doc_id,
+                gap_pages=len(gaps),
+                reason=fallback.reason,
+            )
             return DocumentOutcome(
                 doc_id=doc_id,
                 path=str(context.path),
@@ -831,6 +972,14 @@ class TaskRunner:
             note=decision.report_note,
         )
         self._reused[doc_id] = outcome
+        self._telemetry.record_document(stp=not document.gap_pages)
+        log_event(
+            "document_finalized",
+            doc_id=doc_id,
+            pages=len(document.pages),
+            gap_pages=len(document.gap_pages),
+            delivery_level=decision.level.value,
+        )
         return outcome
 
     def _write_outputs(self, contexts: Sequence[_DocContext]) -> None:
@@ -974,6 +1123,7 @@ def create_builtin_runner(
     pending: PendingQueue | None = None,
     output_dir: Path | str = "var/output",
     config: TaskConfig | None = None,
+    telemetry: TaskTelemetry | None = None,
 ) -> TaskRunner:
     """构造内置引擎的 runner（真实 PDF / CSV / TXT 链路，测试与 CLI 共用）。"""
     from dataagent.pipeline.ingest.ingestor import (
@@ -1004,4 +1154,5 @@ def create_builtin_runner(
         output_dir=output_dir,
         config=config,
         pending=pending_queue,
+        telemetry=telemetry,
     )

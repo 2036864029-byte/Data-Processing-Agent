@@ -102,6 +102,8 @@ def configure_logging(*, level: int = logging.INFO, stream: Any = None) -> None:
     handler.setFormatter(JsonFormatter())
     logger.addHandler(handler)
     logger.setLevel(level)
+    # alembic fileConfig 默认 disable_existing_loggers=True；显式重新启用
+    logger.disabled = False
     logger.propagate = False
 
 
