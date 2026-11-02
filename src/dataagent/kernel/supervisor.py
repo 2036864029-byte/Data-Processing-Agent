@@ -70,6 +70,31 @@ class ArtifactWriter(Protocol):
     def write(self, artifact_id: str) -> None: ...
 
 
+class InMemoryProgressRepository:
+    """P0 单进程仓储：状态 + resume_point；测试与本地演示用。"""
+
+    def __init__(self) -> None:
+        self._states: dict[str, State] = {}
+        self._resume: dict[str, int] = {}
+        self.commits: list[tuple[str, int]] = []
+
+    def state(self, task_id: str) -> State:
+        try:
+            return self._states[task_id]
+        except KeyError as exc:
+            raise KeyError(f"任务未初始化：{task_id}") from exc
+
+    def save_state(self, task_id: str, state: State) -> None:
+        self._states[task_id] = state
+
+    def resume_point(self, task_id: str) -> int | None:
+        return self._resume.get(task_id)
+
+    def commit_batch(self, task_id: str, batch_index: int) -> None:
+        self._resume[task_id] = batch_index
+        self.commits.append((task_id, batch_index))
+
+
 class ProgressRepository(Protocol):
     """PG 中的任务状态与 resume_point。"""
 
@@ -138,6 +163,19 @@ class Supervisor:
         next_state = transition(self._repository.state(task_id), event)
         self._repository.save_state(task_id, next_state)
         return next_state
+
+    def ensure_initial(self, task_id: str) -> State:
+        """任务首次进入控制面时落 RECEIVED；已有状态则原样返回。"""
+        try:
+            return self._repository.state(task_id)
+        except KeyError:
+            self._repository.save_state(task_id, State.RECEIVED)
+            return State.RECEIVED
+
+    def begin_task(self, task_id: str) -> State:
+        """一次新的执行尝试：从 RECEIVED 重新进入状态机（不沿用旧终态）。"""
+        self._repository.save_state(task_id, State.RECEIVED)
+        return State.RECEIVED
 
     def run_batches(
         self, context: TaskRunContext, batches: Sequence[Batch]

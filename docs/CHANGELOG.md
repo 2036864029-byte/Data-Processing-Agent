@@ -88,6 +88,10 @@
   - 队列深度 = Redis Streams 未投递（lag）+ 已投递未确认（PEL）；
     worker 存活数来自 Redis 心跳键（TTL 120s，60s 内有心跳计存活），
     worker 每个 poll 周期 best-effort 上报，进程退出后 key 自然过期
+  - 执行由 `Supervisor` 驱动唯一状态机：任务级投影
+    `RECEIVED → SNIFFED/CLASSIFIED → ROUTED → PARSING → PARSED →
+    POSTPROCESS → L1/L2 → MERGED → L3 → PUBLISHED`；全失败 → `ESCALATED`，
+    无可用文档 → `REJECTED`。进度 detail 携带 `machine_state`
 - **性能门禁（`dataagent bench --sample <pdf>`）**：
   - 单页 p50 ≤120ms、p95 ≤250ms；Python 堆峰值 ≤50MB（tracemalloc 代理口径）
   - 文件打开预算 `⌈页数/批大小⌉+2`；批大小 / worker 由资源公式计算

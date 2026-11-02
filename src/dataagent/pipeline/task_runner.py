@@ -27,7 +27,7 @@ from typing import Any, Final
 from dataagent.contracts.artifacts import ExtractionResult, PageArtifact
 from dataagent.contracts.defects import RepairTier
 from dataagent.contracts.errors import DefectCode
-from dataagent.contracts.messages import PageReport, Verdict
+from dataagent.contracts.messages import PageReport, ParseRequest, Verdict
 from dataagent.contracts.plugin import PluginContext
 from dataagent.contracts.policies import (
     PdfType,
@@ -48,6 +48,13 @@ from dataagent.kernel.plan import (
 from dataagent.kernel.policies.rule_route import RuleRoutePolicy
 from dataagent.kernel.policies.rule_tier import RuleTierPolicy
 from dataagent.kernel.registry import PluginRegistry
+from dataagent.kernel.state import Event, State
+from dataagent.kernel.supervisor import (
+    BatchOutcome,
+    InMemoryProgressRepository,
+    ProgressRepository,
+    Supervisor,
+)
 from dataagent.pipeline.ingest.ingestor import (
     DocumentRecord,
     Ingestor,
@@ -196,6 +203,7 @@ class TaskOutcome:
     pending: tuple[PendingRecord, ...] = ()
     plan_resolution: PlanResolution | None = None
     decisions: tuple[DecisionRecord, ...] = ()
+    machine_state: str | None = None
 
     def count(self, status: str) -> int:
         return sum(1 for document in self.documents if document.status == status)
@@ -236,6 +244,8 @@ class TaskRunner:
         pending: PendingQueue | None = None,
         telemetry: TaskTelemetry | None = None,
         progress: TaskProgressStore | None = None,
+        supervisor: Supervisor | None = None,
+        state_repository: ProgressRepository | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._ingestor = ingestor
@@ -254,6 +264,12 @@ class TaskRunner:
         self._pending = pending
         self._telemetry = telemetry if telemetry is not None else TaskTelemetry()
         self._progress = progress
+        self._supervisor = supervisor or Supervisor(
+            executor=_NoopBatchExecutor(),
+            artifacts=_NoopArtifactWriter(),
+            repository=state_repository or InMemoryProgressRepository(),
+        )
+        self._state = State.RECEIVED
         self._clock = clock
         self._task_id = "task-local"
         self._reused: dict[str, DocumentOutcome] = {}
@@ -271,6 +287,7 @@ class TaskRunner:
         self._reused = {}
         self._contexts = {}
         self._telemetry.reset()
+        self._state = self._supervisor.begin_task(task_id)
         self._record_progress(
             "running", done=0, total=0, detail={"files": len(paths)}
         )
@@ -290,6 +307,19 @@ class TaskRunner:
                     analyzed.append(result)
 
             total_pages = sum(len(context.universe) for context in analyzed)
+            if analyzed:
+                self._advance(task_id, Event.INTEGRITY_OK)
+                if any(
+                    context.routing.family is Family.PDF
+                    for context in analyzed
+                ):
+                    self._advance(task_id, Event.FAMILY_PDF)
+                    self._advance(task_id, Event.ROUTE_READY)
+                else:
+                    self._advance(task_id, Event.FAMILY_OTHER)
+                self._advance(task_id, Event.QUEUED)
+            else:
+                self._advance(task_id, Event.INTEGRITY_FAIL)
             self._record_progress(
                 "running",
                 done=0,
@@ -299,6 +329,8 @@ class TaskRunner:
             resolution, decisions, stopped_by = self._execute_plan(
                 analyzed, total_pages
             )
+            if analyzed:
+                self._advance(task_id, Event.PARSE_DONE)
 
             done_pages = 0
             for index, context in enumerate(analyzed, start=1):
@@ -340,6 +372,22 @@ class TaskRunner:
 
             with span("output", stage="output"):
                 self._write_outputs(analyzed)
+            if analyzed:
+                processed_docs = sum(
+                    1 for item in outcomes.values() if item.status == "processed"
+                )
+                failed_docs = sum(
+                    1 for item in outcomes.values() if item.status == "failed"
+                )
+                gap_pages = sum(
+                    item.gap_pages for item in outcomes.values()
+                )
+                for event in self._completion_events(
+                    processed_docs=processed_docs,
+                    failed_docs=failed_docs,
+                    gap_pages=gap_pages,
+                ):
+                    self._advance(task_id, event)
             stats = self._stats(
                 analyzed, total_pages, self._clock() - started, stopped_by
             )
@@ -393,6 +441,7 @@ class TaskRunner:
             pending=tuple(self._pending.all() if self._pending is not None else ()),
             plan_resolution=resolution,
             decisions=decisions,
+            machine_state=self._state.value,
         )
 
     def process_pages(
@@ -408,12 +457,14 @@ class TaskRunner:
         self._contexts = {}
         self._duplicates = []
         self._telemetry.reset()
+        self._state = self._supervisor.begin_task(task_id)
         self._record_progress(
             "running", done=0, total=0, detail={"files": 1}
         )
         with span("task", task_id=task_id, stage="task"):
             result = self._analyze(Path(path))
             if isinstance(result, DocumentOutcome):
+                self._advance(task_id, Event.INTEGRITY_FAIL)
                 self._record_progress(
                     "finished",
                     done=0,
@@ -421,12 +472,26 @@ class TaskRunner:
                     detail={"status": result.status},
                 )
                 return result
+            self._advance(task_id, Event.INTEGRITY_OK)
+            if result.routing.family is Family.PDF:
+                self._advance(task_id, Event.FAMILY_PDF)
+                self._advance(task_id, Event.ROUTE_READY)
+            else:
+                self._advance(task_id, Event.FAMILY_OTHER)
+            self._advance(task_id, Event.QUEUED)
             requested = [page for page in pages if page in result.universe]
             self._process_stage(
                 result, requested, self._config.profile_speed.value
             )
+            self._advance(task_id, Event.PARSE_DONE)
             with span("finalize", doc_id=result.record.doc_id, stage="merge"):
                 outcome = self._finalize(result, None, only_pages=requested)
+            for event in self._completion_events(
+                processed_docs=1 if outcome.status == "processed" else 0,
+                failed_docs=1 if outcome.status == "failed" else 0,
+                gap_pages=outcome.gap_pages,
+            ):
+                self._advance(task_id, event)
             with span("output", stage="output"):
                 self._write_outputs([result])
             self._telemetry.finish(task_id)
@@ -564,6 +629,46 @@ class TaskRunner:
             doc_id=doc_id, path=path, status=status, family=family
         )
 
+    def _advance(self, task_id: str, event: Event) -> State:
+        """沿 kernel 唯一状态表推进任务（控制面驱动，不再各自维护状态）。"""
+        self._state = self._supervisor.advance(task_id, event)
+        log_event(
+            "state_transition",
+            task_id=task_id,
+            state=self._state.value,
+            transition_event=event.value,
+        )
+        return self._state
+
+    def _completion_events(
+        self, *, processed_docs: int, failed_docs: int, gap_pages: int
+    ) -> list[Event]:
+        """任务级状态投影：页级细节收敛为一条合法路径。
+
+        注意：这是任务级状态机，不逐页建模档位；TIER_T1 用来表示
+        “已进入后处理/修复阶段”。全部失败 → ESCALATED；有缺口 →
+        ATTRIBUTED → T1 修复 → L1 通过；无缺口 → 一次通过。
+        """
+        if processed_docs == 0 and failed_docs > 0:
+            return [
+                Event.TIER_T1,
+                Event.POSTPROCESS_DONE,
+                Event.QC_FAIL,
+                Event.UNRESOLVED,
+            ]
+        events = [Event.TIER_T1, Event.POSTPROCESS_DONE]
+        if gap_pages > 0:
+            events.extend([Event.QC_FAIL, Event.ACTION_T1, Event.POSTPROCESS_DONE])
+        events.extend(
+            [
+                Event.QC_PASS,
+                Event.QC_PASS,
+                Event.MERGE_DONE,
+                Event.QC_PASS,
+            ]
+        )
+        return events
+
     def _record_progress(
         self,
         state: str,
@@ -575,6 +680,7 @@ class TaskRunner:
         """任务进度 best-effort 写入：失败只记日志，不影响主链路。"""
         if self._progress is None:
             return
+        payload = {**detail, "machine_state": self._state.value}
         try:
             self._progress.upsert(
                 TaskProgress(
@@ -583,7 +689,7 @@ class TaskRunner:
                     progress=f"{done}/{total}",
                     pages_total=total,
                     pages_done=done,
-                    detail=detail,
+                    detail=payload,
                 )
             )
         except Exception as exc:
@@ -1151,6 +1257,19 @@ class TaskRunner:
         )
 
 
+class _NoopBatchExecutor:
+    """状态机接入用：runner 自身执行解析，supervisor 只驱动状态。"""
+
+    def execute(self, request: ParseRequest) -> BatchOutcome:
+        del request
+        return BatchOutcome(artifact_ids=())
+
+
+class _NoopArtifactWriter:
+    def write(self, artifact_id: str) -> None:
+        del artifact_id
+
+
 def _probe_stages(plan: FrozenPlan) -> list[PlanStageSpec]:
     probe: list[PlanStageSpec] = []
     for stage in plan.spec.stages:
@@ -1214,6 +1333,8 @@ def create_builtin_runner(
     config: TaskConfig | None = None,
     telemetry: TaskTelemetry | None = None,
     progress: TaskProgressStore | None = None,
+    supervisor: Supervisor | None = None,
+    state_repository: ProgressRepository | None = None,
 ) -> TaskRunner:
     """构造内置引擎的 runner（真实 PDF / CSV / TXT 链路，测试与 CLI 共用）。"""
     from dataagent.pipeline.ingest.ingestor import (
@@ -1246,4 +1367,6 @@ def create_builtin_runner(
         pending=pending_queue,
         telemetry=telemetry,
         progress=progress,
+        supervisor=supervisor,
+        state_repository=state_repository,
     )
