@@ -122,7 +122,7 @@ class RawItem:
 
 
 def test_items_for_page_uses_one_indexed_pages() -> None:
-    raw = [RawItem("a", 0, 0, 1, 1, page=0), RawItem("b", 0, 0, 1, 1, page=1)]
+    raw = [RawItem("a", 0, 0, 1, 1, page=1), RawItem("b", 0, 0, 1, 1, page=2)]
 
     assert [value.text for value in items_for_page(raw, 1)] == ["a"]
     assert [value.text for value in items_for_page(raw, 2)] == ["b"]

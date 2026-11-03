@@ -81,11 +81,11 @@ def from_pdf_inspector(item: Any) -> PositionedText:
 
 
 def items_for_page(items: Iterable[Any], page_no: int) -> list[PositionedText]:
-    """筛选某页文本项；pdf-inspector 的 item.page 是 0-indexed。"""
+    """筛选某页文本项；pdf-inspector 的 item.page 是 1-indexed。"""
     return [
         from_pdf_inspector(item)
         for item in items
-        if int(item.page) + 1 == page_no
+        if int(item.page) == page_no
     ]
 
 

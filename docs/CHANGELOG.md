@@ -79,6 +79,13 @@
     未配对 L1 若与任一 L0 区域重叠则视为碎片丢弃，否则保留为独立表
   - 实测：p25 正确输出“上方董事表 + 下方股东大会表”两张表；
     p60 选中 7×4 坐标网格（fill 0.79）
+- **页码基准修正与表格对照**：
+  - 修正 `pdf-inspector.TextItem.page` 为 1-indexed（此前 +1 导致 L1 与 L0
+    相差一页，是 p25 错位/配错表的根因）
+  - 新增 `pipeline/table/render.py`（TableGrid → Markdown）与
+    `scripts/compare_tables.py`（原页图 vs 选中输出）
+  - 对照发现：p25 董事表多行单元格/rowspan 被合并（王鑫刘世仲、男男）；
+    p60 只选到长表的下半段；p86 部分行被合并，其余表基本正确
 
 ### M3 任务级模型（2026-11-03）
 
