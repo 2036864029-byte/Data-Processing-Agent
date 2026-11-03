@@ -22,6 +22,10 @@
 # D. 无人工标注时输出 insufficient_labels；完成打分后运行
 .venv/Scripts/python.exe tests/eval/calibrate.py
 
+# 解析质量自动回归（60 页人工子集；不依赖重新打分）
+.venv/Scripts/python.exe tests/eval/regression.py --update-baseline
+.venv/Scripts/python.exe tests/eval/regression.py   # 回退则退出码 1
+
 # 构造样本自动评测（CER / 阅读顺序 / 表格 cell F1）
 .venv/Scripts/python.exe tests/eval/evaluate.py
 ```
@@ -56,5 +60,6 @@
 | `parsed/<sample_id>.md` | 每页产物（查看器右侧内容） |
 | `annotations_filled.csv` | 查看器导出的打分（导入后写回 annotations.csv） |
 | `calibration_report.json` | 权重、阈值、留出集 Spearman / 一致率 |
+| `regression_baseline.json` | 60 页产物自动指标基线（伪空格/硬换行/编号/表格/引擎 CER） |
 | `eval_report.json` | 构造样本自动评测与门禁；含文本层恢复率与恢复路径 CER |
 | `viewer.html` | 样本清单查看页 |
