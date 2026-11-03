@@ -70,7 +70,7 @@ def test_multiple_tables_are_paired_by_order() -> None:
     assert all(choice.source == "markdown" for choice in routing.tables)
 
 
-def test_extra_geometry_fragments_are_ignored_when_markdown_exists() -> None:
+def test_unpaired_geometry_table_is_kept_when_not_overlapping_l0() -> None:
     items = [
         *good_geometry_items(),
         item("c", 0, 200),
@@ -83,8 +83,11 @@ def test_extra_geometry_fragments_are_ignored_when_markdown_exists() -> None:
 
     assert routing.markdown_count == 1
     assert routing.geometry_count == 2
-    assert len(routing.tables) == 1
-    assert routing.tables[0].source == "markdown"
+    assert len(routing.tables) == 2
+    assert [choice.source for choice in routing.tables] == [
+        "markdown",
+        "geometry",
+    ]
 
 
 def test_geometry_tables_are_kept_when_no_markdown_table() -> None:
@@ -107,3 +110,32 @@ def test_geometry_tables_are_kept_when_no_markdown_table() -> None:
         "geometry",
         "geometry",
     ]
+
+
+def test_pairing_uses_bbox_not_index_order() -> None:
+    markdown = (
+        "| a | b |\n|---|---|\n| 1 | 2 |\n\n"  # 上方表：正常
+        "| | |\n|---|---|\n| c | d |\n"  # 下方表：表头缺失
+    )
+    items = [
+        item("c", 0, 200),
+        item("d", 50, 200),
+        item("e", 0, 184),
+        item("f", 50, 184),
+    ]
+
+    routing = route_tables(markdown, items, page_no=1)
+
+    assert len(routing.tables) == 2
+    sources = [choice.source for choice in routing.tables]
+    assert sources.count("markdown") == 1
+    assert sources.count("geometry") == 1
+    markdown_choice = next(
+        choice for choice in routing.tables if choice.source == "markdown"
+    )
+    assert {cell.text for cell in markdown_choice.grid.cells} == {
+        "a",
+        "b",
+        "1",
+        "2",
+    }
