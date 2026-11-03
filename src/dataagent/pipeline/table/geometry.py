@@ -192,14 +192,20 @@ def build_table_grid(
     rows = _cluster_rows(selected)
     for row in rows:
         row.cells = _group_cells(row.items)
-    columns = _cluster_columns([cell.start for row in rows for cell in row.cells])
+    columns = _column_starts(rows)
     if not columns:
         raise ValueError("无法确定表格列")
     cells: list[TableCell] = []
     for row_index, row in enumerate(rows):
-        for cell in row.cells:
-            column = _column_index(cell.start, columns)
-            colspan = _span(cell.end, column, columns)
+        next_col = 0
+        for cell in sorted(row.cells, key=lambda value: value.start):
+            column = max(_nearest_column(cell, columns), next_col)
+            if column >= len(columns):
+                continue
+            colspan = min(
+                _covered_columns(cell, column, columns), len(columns) - column
+            )
+            next_col = column + colspan
             cells.append(
                 TableCell(
                     row=row_index,
@@ -284,30 +290,44 @@ def _region_from_rows(
     )
 
 
-def _cluster_columns(starts: Sequence[float]) -> list[float]:
+COLUMN_TOLERANCE = 12.0
+
+
+def _column_starts(rows: Sequence[_Row]) -> list[float]:
+    """用列数最多的行提取列锚，避免跨列宽单元格把两列合并。"""
+    counts = [len(row.cells) for row in rows if row.cells]
+    if not counts:
+        return []
+    target = max(counts)
+    candidates = [row for row in rows if len(row.cells) == target]
+    widest = max(
+        candidates,
+        key=lambda row: max(cell.end for cell in row.cells)
+        - min(cell.start for cell in row.cells),
+    )
+    starts = [cell.start for cell in widest.cells]
     columns: list[float] = []
-    for start in sorted(starts):
-        if not columns or start - columns[-1] > MIN_CELL_GAP:
+    for start in starts:
+        if not columns or start - columns[-1] > COLUMN_TOLERANCE:
             columns.append(start)
         else:
             columns[-1] = min(columns[-1], start)
     return columns
 
 
-def _column_index(start: float, columns: Sequence[float]) -> int:
-    index = 0
-    for position, column in enumerate(columns):
-        if column <= start + CELL_GAP_TOLERANCE:
-            index = position
-        else:
-            break
-    return index
+def _nearest_column(cell: _CellGroup, columns: Sequence[float]) -> int:
+    return min(
+        range(len(columns)),
+        key=lambda index: abs(columns[index] - cell.start),
+    )
 
 
-def _span(end: float, column: int, columns: Sequence[float]) -> int:
+def _covered_columns(
+    cell: _CellGroup, column: int, columns: Sequence[float]
+) -> int:
     span = 1
-    for next_column in columns[column + 1 :]:
-        if end >= next_column - CELL_GAP_TOLERANCE:
+    for next_start in columns[column + 1 :]:
+        if next_start <= cell.end + 1.0:
             span += 1
         else:
             break
