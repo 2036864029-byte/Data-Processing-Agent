@@ -6,10 +6,10 @@
 指标（全部来自产物 Markdown / 表格解析）：
 - phantom_cjk_space_rate：汉字间伪空格（每千字）
 - hard_wrap_ratio：段落硬换行比例（行尾无终止标点）
-- numbering_ratio：编号/条款行占比
+- numbering_per_1000：编号/条款行密度（每千字）
 - prose_ratio：非表格行占比
 - table_cell_fill / table_header_ok / table_column_variance：表格指标
-- reference_cer：与 PDFium 文本层的字符错误率（仅 present 页，作为引擎一致性参考）
+- reference_cer：与 PDFium 文本层的字符错误率（忽略空白，仅 present 页）
 
 用法：
     python tests/eval/regression.py --update-baseline
@@ -62,7 +62,7 @@ LOWER_IS_BETTER = frozenset(
 )
 HIGHER_IS_BETTER = frozenset(
     {
-        "numbering_ratio",
+        "numbering_per_1000",
         "prose_ratio",
         "table_cell_fill",
         "table_header_ok",
@@ -85,7 +85,7 @@ def markdown_metrics(markdown: str) -> dict[str, float]:
         return {
             "phantom_cjk_space_rate": 0.0,
             "hard_wrap_ratio": 0.0,
-            "numbering_ratio": 0.0,
+            "numbering_per_1000": 0.0,
             "prose_ratio": 0.0,
             "table_cell_fill": 1.0,
             "table_header_ok": 1.0,
@@ -108,7 +108,7 @@ def markdown_metrics(markdown: str) -> dict[str, float]:
     return {
         "phantom_cjk_space_rate": round(phantom, 4),
         "hard_wrap_ratio": round(hard_wrap, 4),
-        "numbering_ratio": round(numbering / len(prose), 4) if prose else 0.0,
+        "numbering_per_1000": round(numbering / max(1, len(markdown)) * 1000, 4),
         "prose_ratio": round(1.0 - table_lines / len(lines), 4),
         "table_cell_fill": round(table.cell_fill, 4) if table else 1.0,
         "table_header_ok": 1.0 if (table is None or table.header_ok) else 0.0,
@@ -144,7 +144,7 @@ def compute_metrics(
             reference = reference_text(Path(row["file"]), int(row["page_no"]))
             if reference:
                 metrics["reference_cer"] = round(
-                    character_error_rate(reference, markdown), 4
+                    _cer_no_space(reference, markdown), 4
                 )
         samples[sample_id] = metrics
 
@@ -191,6 +191,10 @@ def compare(
             Comparison(metric, old, new, round(delta, 4), status)
         )
     return comparisons
+
+
+def _cer_no_space(reference: str, hypothesis: str) -> float:
+    return character_error_rate("".join(reference.split()), "".join(hypothesis.split()))
 
 
 def _aggregate(rows: Sequence[Mapping[str, float]]) -> dict[str, float]:

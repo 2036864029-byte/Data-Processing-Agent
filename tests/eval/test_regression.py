@@ -21,7 +21,7 @@ def test_markdown_metrics_detects_artifacts() -> None:
 
     assert metrics["hard_wrap_ratio"] > 0
     assert metrics["phantom_cjk_space_rate"] > 0
-    assert metrics["numbering_ratio"] > 0
+    assert metrics["numbering_per_1000"] > 0
     assert metrics["prose_ratio"] == 1.0
 
 
@@ -41,7 +41,7 @@ def test_compare_directions_and_tolerance() -> None:
             "phantom_cjk_space_rate": 10.0,
             "hard_wrap_ratio": 0.5,
             "table_cell_fill": 0.9,
-            "numbering_ratio": 0.2,
+            "numbering_per_1000": 0.2,
         }
     }
     current = {
@@ -49,7 +49,7 @@ def test_compare_directions_and_tolerance() -> None:
             "phantom_cjk_space_rate": 2.0,
             "hard_wrap_ratio": 0.7,
             "table_cell_fill": 0.95,
-            "numbering_ratio": 0.1,
+            "numbering_per_1000": 0.1,
         }
     }
 
@@ -58,7 +58,7 @@ def test_compare_directions_and_tolerance() -> None:
     assert result["phantom_cjk_space_rate"] == "improved"
     assert result["hard_wrap_ratio"] == "regressed"
     assert result["table_cell_fill"] == "improved"
-    assert result["numbering_ratio"] == "regressed"
+    assert result["numbering_per_1000"] == "regressed"
 
 
 def test_compute_metrics_reads_human_sheet(tmp_path: Path) -> None:
