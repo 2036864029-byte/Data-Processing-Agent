@@ -48,6 +48,13 @@
   - `2（）` / `（）2` → `（2）`；`（ 2 ）` / `(2）` / `（2)` → `（2）`；
     行首或中文后的半角 `(2)` → `（2）`；表格块不动、幂等
   - 60 页错序编号 23 处 → **0**；编号密度提升，其余指标无回退
+- **表格结构契约与坐标建网格（第一版）**：
+  - `contracts/table.py`：`TableGrid` / `TableCell`（行列、span、bbox、来源、置信度）
+  - `contracts/structure.py`：`DocumentStructure` / `PageStructure` / text/table blocks
+  - `pipeline/table/geometry.py`：pdf-inspector 坐标 → 行聚类 → 单元格分组 →
+    列对齐与 colspan → TableGrid；混合页只取表格区域，正文行排除
+  - 已知限制：跨页表/续页表头、区域切分与少量签名块误判仍需下一轮优化；
+    尚未接入页面产物与 L0 Markdown 表的择优路由
 
 ### M3 任务级模型（2026-11-03）
 
