@@ -35,6 +35,15 @@
 - B8 RulePack 与受限表达式：自建 JSONLogic 求值器、版本化/回滚/dry-run、声明式字段提取
 - B9 黄金集工具链：六类 200 页、构造样本、对照查看器、标定与评测脚本
 
+### M3 任务级模型（2026-11-03）
+
+- **NL → Plan**（`kernel/policies/model_plan.py`）：
+  - 模型客户端通过 `PlanDraftModel` Protocol 注入（provider 可替换）
+  - 输出必须通过 `parse_plan` 校验：3 种 stage kind、统计指标白名单、分支前向跳转
+  - 非法输出重试（默认 2 次），每次尝试计一次模型调用；接入 `PlanGuardTracker`
+  - `compile_frozen` 返回冻结 Plan；`compile` 提供 PlanPolicy 最小视图
+  - 真实 provider（pydantic-ai）适配器待模型端点配置后接入
+
 ### 可复现性基线（P0-B）
 
 - **插件版本**：`engine.pdf@1.0.0`、`engine.csv@1.0.0`、`engine.text@1.0.0`；

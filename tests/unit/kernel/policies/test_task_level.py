@@ -9,7 +9,6 @@ from dataclasses import asdict
 import pytest
 
 from dataagent.contracts.policies import Plan, StageKind, Strategy
-from dataagent.kernel.policies.model_plan import ModelPlanPolicy
 from dataagent.kernel.policies.model_replan import ModelReplanPolicy
 from dataagent.kernel.policies.model_strategy import ModelStrategyPolicy
 from dataagent.kernel.policies.rule_replan import RuleReplanPolicy
@@ -85,10 +84,8 @@ def test_abort_takes_priority_over_other_signals() -> None:
     assert policy.select(stats) is Strategy.ABORT
 
 
-def test_model_implementations_are_p0_placeholders() -> None:
-    """P0 只使用规则实现；模型实现留到 M3，且不引入 pydantic-ai。"""
-    with pytest.raises(NotImplementedError):
-        ModelPlanPolicy().compile("把年报转成 JSON", {})
+def test_remaining_model_policies_are_placeholders() -> None:
+    """M3 先接 NL→Plan；重规划 / 整本策略仍待实现。"""
     with pytest.raises(NotImplementedError):
         ModelReplanPolicy().decide({})
     with pytest.raises(NotImplementedError):
