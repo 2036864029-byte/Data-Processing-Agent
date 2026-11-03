@@ -83,9 +83,31 @@
   - 修正 `pdf-inspector.TextItem.page` 为 1-indexed（此前 +1 导致 L1 与 L0
     相差一页，是 p25 错位/配错表的根因）
   - 新增 `pipeline/table/render.py`（TableGrid → Markdown）与
-    `scripts/compare_tables.py`（原页图 vs 选中输出）
+    `scripts/compare_tables.py`（原页图 vs 选中输出；后由
+    `scripts/validate_tables.py` 的四栏对照取代）
   - 对照发现：p25 董事表多行单元格/rowspan 被合并（王鑫刘世仲、男男）；
     p60 只选到长表的下半段；p86 部分行被合并，其余表基本正确
+
+### 表格抽取（2026-11-03）
+
+- **pdfplumber 有框线表格 L2**（`platform/plugins/adapters/table_pdfplumber.py`）：
+  - `lines` 策略读取真实单元格边界（lines + rects 均视为边），
+    合并单元格按 bbox 跨行/跨列推断 `rowspan/colspan`
+  - pdfplumber 左上原点坐标转换为内部左下原点；退化表（<2 行/列、非空格 <2）丢弃
+  - 依赖 pin：`pdfplumber==0.11.10`（uv.lock 锁定）
+- **验收网关**（`pipeline/table/acceptance.py`）：有框线结果必须通过才允许替换 L0
+  - 非空占比 ≥ 0.15；L0 文本字符覆盖率 ≥ 0.85（按表格区域计算，排除标题行）；
+    pdfplumber 行数 / L0 行数 ≥ 0.50；多值单元格（多个日期/金额）拒绝；
+    bbox 超出页面 5% 拒绝
+  - 任一失败回退 L0，并返回 `rejected_ruled` 原因，便于观测
+- **路由**（`pipeline/table/router.py`）：有框线候选优先；通过后抑制重复 L0
+  （字符覆盖 ≥ 0.8）与重叠 L1 碎片；失败时保持原 L0/L1 逻辑
+- **离线验证**（`scripts/validate_tables.py`）：构造样本真值 cell F1 +
+  真实页四栏对照（原图 / L0 / L1 / pdfplumber）与验收统计
+  - 实测四页（p24/p25/p60/p86）全部选中 pdfplumber：p25 人名/性别/年龄/日期拆开、
+    p60 恢复完整 48 行、p86 五张表各自正确；p24 标题行被排除
+  - 构造 cross_page 样本 F1 0.9917：夹具框线比文本行少一条，仅少一行表头，
+    数据行全部命中
 
 ### M3 任务级模型（2026-11-03）
 
@@ -99,7 +121,8 @@
 ### 可复现性基线（P0-B）
 
 - **插件版本**：`engine.pdf@1.0.0`、`engine.csv@1.0.0`、`engine.text@1.0.0`；
-  `pdf-inspector==1.25.2`（uv.lock 锁定）；`pypdfium2` 用于隐藏文本层探测
+  `pdf-inspector==1.25.2`、`pdfplumber==0.11.10`（uv.lock 锁定）；
+  `pypdfium2` 用于隐藏文本层探测
 - **阈值**：
   - 体检：单文件 ≤2GB、页树深度 ≤50、单页 ≤14400pt、对象 ≤200 万、
     资源嵌套 ≤30、解压比 ≤200

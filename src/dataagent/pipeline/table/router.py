@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.table.acceptance import coverage_of, evaluate_candidate
 from dataagent.pipeline.table.anchor import ProjectedGrid, project_grid
 from dataagent.pipeline.table.geometry import (
     PositionedText,
@@ -23,6 +24,7 @@ from dataagent.pipeline.table.quality import GridQuality, grid_quality
 SELECTION_MARGIN = 0.05
 PAIR_MIN_OVERLAP = 0.15
 FRAGMENT_OVERLAP = 0.5
+L0_SUPPRESS_COVERAGE = 0.8
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +40,8 @@ class TableRouting:
     tables: tuple[TableChoice, ...] = ()
     markdown_count: int = 0
     geometry_count: int = 0
+    ruled_count: int = 0
+    rejected_ruled: tuple[str, ...] = ()
 
 
 def route_tables(
@@ -45,6 +49,7 @@ def route_tables(
     items: Sequence[PositionedText],
     *,
     page_no: int,
+    ruled_tables: Sequence[TableGrid] = (),
 ) -> TableRouting:
     page_bbox = _page_bbox(items)
     l0 = markdown_tables(markdown, page_no=page_no, bbox=page_bbox)
@@ -68,13 +73,34 @@ def route_tables(
             continue
         l1_pairs.append((grid, region.bbox))
 
+    accepted_ruled: list[TableGrid] = []
+    rejected_ruled: list[str] = []
+    choices: list[TableChoice] = []
+    gate_bbox = page_bbox if items else None
+    for ruled in ruled_tables:
+        reference = _reference_for(ruled, l0_grids, projected)
+        decision = evaluate_candidate(ruled, reference, page_bbox=gate_bbox)
+        if not decision.accepted:
+            rejected_ruled.append(decision.reason)
+            continue
+        accepted_ruled.append(ruled)
+        choices.append(
+            TableChoice(
+                grid=ruled,
+                source="ruled",
+                reason=decision.reason,
+                quality=grid_quality(ruled),
+            )
+        )
+
     pairs = _pair_by_overlap(l0_grids, projected, l1_pairs)
     paired_l0 = {index for index, _ in pairs}
     paired_l1 = {index for _, index in pairs}
 
-    choices: list[TableChoice] = []
     for l0_index, l1_index in pairs:
         markdown_grid = l0_grids[l0_index]
+        if _covered_by_ruled(markdown_grid, accepted_ruled):
+            continue
         geometry_grid, bbox = l1_pairs[l1_index]
         geometry_grid = geometry_grid.model_copy(update={"bbox": bbox})
         markdown_quality = grid_quality(markdown_grid)
@@ -107,6 +133,8 @@ def route_tables(
     for index, grid in enumerate(l0_grids):
         if index in paired_l0:
             continue
+        if _covered_by_ruled(grid, accepted_ruled):
+            continue
         choices.append(
             TableChoice(
                 grid=grid,
@@ -122,6 +150,11 @@ def route_tables(
     for index, (grid, bbox) in enumerate(l1_pairs):
         if index in paired_l1:
             continue
+        if any(
+            _overlap_ratio(bbox, ruled.bbox) >= FRAGMENT_OVERLAP
+            for ruled in accepted_ruled
+        ):
+            continue
         if any(_overlap_ratio(bbox, box) >= FRAGMENT_OVERLAP for box in l0_boxes):
             continue
         choices.append(
@@ -136,6 +169,50 @@ def route_tables(
         tables=tuple(choices),
         markdown_count=len(l0),
         geometry_count=len(l1_pairs),
+        ruled_count=len(ruled_tables),
+        rejected_ruled=tuple(rejected_ruled),
+    )
+
+
+def _reference_for(
+    ruled: TableGrid,
+    l0_grids: Sequence[TableGrid],
+    projected: Sequence[ProjectedGrid | None],
+) -> TableGrid | None:
+    """按“文本覆盖优先、重叠面积次之”为有框线表选择 L0 参考。"""
+    best: tuple[float, float, int] | None = None
+    for index, item in enumerate(projected):
+        if item is None:
+            continue
+        overlap = _intersection_area(item.grid.bbox, ruled.bbox)
+        if overlap <= 0:
+            continue
+        score = (coverage_of(l0_grids[index], [ruled]), overlap, index)
+        if best is None or score[:2] > best[:2]:
+            best = score
+    return None if best is None else l0_grids[best[2]]
+
+
+def _covered_by_ruled(
+    grid: TableGrid, accepted_ruled: Sequence[TableGrid]
+) -> bool:
+    if not accepted_ruled:
+        return False
+    region = _union_boxes([ruled.bbox for ruled in accepted_ruled])
+    return (
+        coverage_of(grid, accepted_ruled, region=region)
+        >= L0_SUPPRESS_COVERAGE
+    )
+
+
+def _union_boxes(
+    boxes: Sequence[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float]:
+    return (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
     )
 
 
