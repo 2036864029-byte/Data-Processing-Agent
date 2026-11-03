@@ -55,6 +55,12 @@
     列对齐与 colspan → TableGrid；混合页只取表格区域，正文行排除
   - 已知限制：跨页表/续页表头、区域切分与少量签名块误判仍需下一轮优化；
     尚未接入页面产物与 L0 Markdown 表的择优路由
+- **表格路由（L0/L1 择优）**：
+  - `pipeline/table/markdown.py`：Markdown 管道表 → TableGrid（L0）
+  - `pipeline/table/quality.py`：cell 填充率 + 表头有效性 + 引擎置信度
+  - `pipeline/table/router.py`：逐表配对，L1 领先 >0.05 才替换 L0；
+    有 L0 时多余 L1 区域视为同表碎片，不重复输出
+  - 真实页结果：p60 选坐标网格（0.829 vs 0.664），p25/p86 选 Markdown
 
 ### M3 任务级模型（2026-11-03）
 
