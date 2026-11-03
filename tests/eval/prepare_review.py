@@ -21,6 +21,7 @@ import pdf_inspector
 import pypdfium2 as pdfium
 from _lib import GOLDEN_ROOT, read_csv, read_json, write_json
 
+from dataagent.pipeline.quality.numbering import repair_numbering
 from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
 from dataagent.platform.plugins.adapters.text_layer import probe_text_layer
 
@@ -52,7 +53,7 @@ def prepare() -> dict[str, Any]:
         markdown = _extract_page_markdown(file_path, page_index)
         meta = manifest.get(sample_id, {})
         status, display, banner = _diagnose(file_path, page_index, markdown, meta)
-        display = normalize_cjk_text(display)
+        display = repair_numbering(normalize_cjk_text(display))
         parsed_path = PARSED_ROOT / f"{sample_id}.md"
         parsed_path.write_text(display, encoding="utf-8")
         image_path = images / f"{sample_id}.png"

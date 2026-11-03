@@ -7,6 +7,7 @@
 - phantom_cjk_space_rate：汉字间伪空格（每千字）
 - hard_wrap_ratio：段落硬换行比例（行尾无终止标点）
 - numbering_per_1000：编号/条款行密度（每千字）
+- malformed_numbering_per_1000：错序/非规范编号密度（每千字）
 - prose_ratio：非表格行占比
 - table_cell_fill / table_header_ok / table_column_variance：表格指标
 - reference_cer：与 PDFium 文本层的字符错误率（忽略空白，仅 present 页）
@@ -36,6 +37,7 @@ from _lib import (
     write_json,
 )
 
+from dataagent.pipeline.quality.numbering import malformed_numbering_count
 from dataagent.pipeline.quality.table_metrics import table_page_metrics
 
 REGRESSION_BASELINE = GOLDEN_ROOT / "regression_baseline.json"
@@ -62,6 +64,7 @@ LOWER_IS_BETTER = frozenset(
 )
 HIGHER_IS_BETTER = frozenset(
     {
+        "malformed_numbering_per_1000",
         "numbering_per_1000",
         "prose_ratio",
         "table_cell_fill",
@@ -86,6 +89,7 @@ def markdown_metrics(markdown: str) -> dict[str, float]:
             "phantom_cjk_space_rate": 0.0,
             "hard_wrap_ratio": 0.0,
             "numbering_per_1000": 0.0,
+            "malformed_numbering_per_1000": 0.0,
             "prose_ratio": 0.0,
             "table_cell_fill": 1.0,
             "table_header_ok": 1.0,
@@ -109,6 +113,9 @@ def markdown_metrics(markdown: str) -> dict[str, float]:
         "phantom_cjk_space_rate": round(phantom, 4),
         "hard_wrap_ratio": round(hard_wrap, 4),
         "numbering_per_1000": round(numbering / max(1, len(markdown)) * 1000, 4),
+        "malformed_numbering_per_1000": round(
+            malformed_numbering_count(markdown) / max(1, len(markdown)) * 1000, 4
+        ),
         "prose_ratio": round(1.0 - table_lines / len(lines), 4),
         "table_cell_fill": round(table.cell_fill, 4) if table else 1.0,
         "table_header_ok": 1.0 if (table is None or table.header_ok) else 0.0,
