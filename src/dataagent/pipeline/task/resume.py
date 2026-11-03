@@ -16,7 +16,7 @@ from dataagent.pipeline.output.delivery import DeliveryLevel
 from dataagent.pipeline.repair.fallback import FallbackPath
 from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.task.results import DocumentOutcome
-from dataagent.platform.store.sql.task_state import TaskStateStore
+from dataagent.pipeline.task.state_store import TaskStateStore
 
 
 def input_signature(paths: Sequence[Path]) -> str:

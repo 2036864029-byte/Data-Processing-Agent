@@ -10,8 +10,8 @@ from alembic.config import Config
 
 from dataagent.kernel.state import State
 from dataagent.pipeline.task.factory import create_builtin_runner
+from dataagent.pipeline.task.state_store import SqlTaskStateStore
 from dataagent.platform.store.sql.engine import Database
-from dataagent.platform.store.sql.task_state import SqlTaskStateStore
 
 pytestmark = pytest.mark.integration
 REPO_ROOT = Path(__file__).resolve().parents[3]

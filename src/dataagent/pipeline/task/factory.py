@@ -25,11 +25,11 @@ from dataagent.pipeline.route.routes import (
 )
 from dataagent.pipeline.sniff.dispatcher import FormatDispatcher
 from dataagent.pipeline.task.config import TaskConfig
+from dataagent.pipeline.task.state_store import SqlTaskStateStore, TaskStateStore
 from dataagent.pipeline.task_runner import TaskRunner
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.plugins.adapters import builtin_plugins
 from dataagent.platform.store.sql.engine import Database
-from dataagent.platform.store.sql.task_state import SqlTaskStateStore, TaskStateStore
 from dataagent.platform.store.sql.tasks import TaskProgressStore
 
 

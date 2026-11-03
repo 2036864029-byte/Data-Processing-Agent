@@ -70,12 +70,12 @@ from dataagent.pipeline.task.resume import (
     outcome_from_payload,
     persist_outcome,
 )
-from dataagent.pipeline.telemetry import TaskTelemetry
-from dataagent.platform.observe.log import log_event, span
-from dataagent.platform.store.sql.task_state import (
+from dataagent.pipeline.task.state_store import (
     InMemoryTaskStateStore,
     TaskStateStore,
 )
+from dataagent.pipeline.telemetry import TaskTelemetry
+from dataagent.platform.observe.log import log_event, span
 from dataagent.platform.store.sql.tasks import TaskProgressStore
 
 

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dataagent.pipeline.task.factory import create_builtin_runner
-from dataagent.platform.store.sql.task_state import InMemoryTaskStateStore
+from dataagent.pipeline.task.state_store import InMemoryTaskStateStore
 
 
 def dense_lines(prefix: str, count: int = 60) -> list[str]:
