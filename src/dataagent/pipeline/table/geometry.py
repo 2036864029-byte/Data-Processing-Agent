@@ -18,7 +18,7 @@ from typing import Any
 from dataagent.contracts.table import TableCell, TableGrid
 from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
 
-ROW_TOLERANCE_RATIO = 0.6
+ROW_TOLERANCE_RATIO = 1.0
 CELL_GAP_TOLERANCE = 3.0
 MIN_CELL_GAP = 8.0
 DEFAULT_MIN_ROWS = 2
@@ -104,6 +104,10 @@ def detect_table_regions(
     index = 0
     while index < len(rows):
         if flags[index]:
+            if run and _vertical_gap(run[-1], rows[index]) > _gap_limit(run):
+                if len(run) >= min_rows:
+                    groups.append(run)
+                run = []
             run.append(rows[index])
             index += 1
             continue
@@ -112,7 +116,7 @@ def detect_table_regions(
             run
             and index + 1 < len(rows)
             and flags[index + 1]
-            and len(_group_cells(rows[index].items)) >= 2
+            and _row_within_run(rows[index], run)
         ):
             run.append(rows[index])
             index += 1
@@ -141,14 +145,30 @@ def _merge_adjacent_groups(groups: list[list[_Row]]) -> list[list[_Row]]:
             continue
         if merged:
             previous = merged[-1]
-            heights = [item.height for row in previous for item in row.items]
-            median_height = sorted(heights)[len(heights) // 2] if heights else 10.0
-            gap = previous[-1].center - group[0].center
-            if 0 < gap <= max(12.0, median_height * 3):
+            gap = _vertical_gap(previous[-1], group[0])
+            if 0 < gap <= _gap_limit(previous):
                 merged[-1] = [*previous, *group]
                 continue
         merged.append(list(group))
     return merged
+
+
+def _row_within_run(row: _Row, run: Sequence[_Row]) -> bool:
+    left = min(item.x for item in row.items)
+    right = max(item.right for item in row.items)
+    run_left = min(item.x for value in run for item in value.items)
+    run_right = max(item.right for value in run for item in value.items)
+    return left >= run_left - 10 and right <= run_right + 10
+
+
+def _vertical_gap(previous: _Row, current: _Row) -> float:
+    return previous.center - current.center
+
+
+def _gap_limit(rows: Sequence[_Row]) -> float:
+    heights = [item.height for row in rows for item in row.items]
+    median_height = sorted(heights)[len(heights) // 2] if heights else 10.0
+    return max(12.0, median_height * 1.8)
 
 
 def build_table_grid(

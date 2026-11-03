@@ -14,8 +14,8 @@ def good_geometry_items() -> list[PositionedText]:
     return [
         item("项目", 0, 330),
         item("金额", 50, 330),
-        item("合计", 0, 310),
-        item("100", 50, 310),
+        item("合计", 0, 314),
+        item("100", 50, 314),
     ]
 
 
@@ -54,12 +54,12 @@ def test_multiple_tables_are_paired_by_order() -> None:
     items = [
         item("a", 0, 330),
         item("b", 50, 330),
-        item("1", 0, 310),
-        item("2", 50, 310),
+        item("1", 0, 314),
+        item("2", 50, 314),
         item("c", 0, 200),
         item("d", 50, 200),
-        item("3", 0, 180),
-        item("4", 50, 180),
+        item("3", 0, 184),
+        item("4", 50, 184),
     ]
 
     routing = route_tables(markdown, items, page_no=1)
@@ -75,8 +75,8 @@ def test_extra_geometry_fragments_are_ignored_when_markdown_exists() -> None:
         *good_geometry_items(),
         item("c", 0, 200),
         item("d", 50, 200),
-        item("3", 0, 180),
-        item("4", 50, 180),
+        item("3", 0, 184),
+        item("4", 50, 184),
     ]
 
     routing = route_tables(good_markdown(), items, page_no=1)
@@ -91,12 +91,12 @@ def test_geometry_tables_are_kept_when_no_markdown_table() -> None:
     items = [
         item("a", 0, 330),
         item("b", 50, 330),
-        item("1", 0, 310),
-        item("2", 50, 310),
+        item("1", 0, 314),
+        item("2", 50, 314),
         item("c", 0, 200),
         item("d", 50, 200),
-        item("3", 0, 180),
-        item("4", 50, 180),
+        item("3", 0, 184),
+        item("4", 50, 184),
     ]
 
     routing = route_tables("", items, page_no=1)
