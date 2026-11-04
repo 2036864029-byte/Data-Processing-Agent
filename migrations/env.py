@@ -7,10 +7,8 @@ SQLAlchemy Core（禁 ORM）：target_metadata 恒为 None，所有 DDL 手写�
 
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

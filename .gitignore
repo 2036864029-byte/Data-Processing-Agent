@@ -23,6 +23,9 @@ var/
 # Test sample corpus — copyright/license-sensitive, keep local only
 doc/test_pdf/
 
+# Golden-set annotation exports — local only
+doc/annotations_filled*.csv
+
 # Claude Code local settings
 .claude/settings.local.json
 
