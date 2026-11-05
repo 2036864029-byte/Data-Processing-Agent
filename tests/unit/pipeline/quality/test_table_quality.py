@@ -1,4 +1,4 @@
-"""L1 表格硬门控测试：填充率 / 列数方差 / 表头缺失均触发 table_structure_broken。"""
+"""L1 表格硬门控测试：填充率需结合行列占用率 / 列数方差 / 表头缺失。"""
 
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ def table_page(**overrides: object) -> L1PageInput:
         "table_cell_fill": 0.95,
         "row_col_consistency": 0.0,
         "table_header_ok": True,
+        "row_occupancy": 1.0,
+        "col_occupancy": 1.0,
         "reading_order_score": 0.97,
         "bbox_coverage": 0.99,
     }
@@ -47,8 +49,25 @@ def test_healthy_table_passes() -> None:
     assert DefectCode.TABLE_STRUCTURE_BROKEN not in codes(table_page())
 
 
-def test_low_cell_fill_fails() -> None:
-    assert DefectCode.TABLE_STRUCTURE_BROKEN in codes(table_page(table_cell_fill=0.5))
+def test_low_fill_with_complete_structure_passes() -> None:
+    # 财务表大量空白单元格，但每行每列都有数据：结构完整，不应判损坏。
+    assert DefectCode.TABLE_STRUCTURE_BROKEN not in codes(
+        table_page(table_cell_fill=0.5)
+    )
+
+
+def test_low_fill_with_incomplete_structure_fails() -> None:
+    assert DefectCode.TABLE_STRUCTURE_BROKEN in codes(
+        table_page(table_cell_fill=0.5, row_occupancy=0.2)
+    )
+
+
+def test_low_fill_without_occupancy_keeps_legacy_behavior() -> None:
+    assert DefectCode.TABLE_STRUCTURE_BROKEN in codes(
+        table_page(
+            table_cell_fill=0.5, row_occupancy=None, col_occupancy=None
+        )
+    )
 
 
 def test_high_column_variance_fails() -> None:

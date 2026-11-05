@@ -317,4 +317,6 @@ class PageQualityService:
             table_cell_fill=table.cell_fill,
             row_col_consistency=table.column_variance,
             table_header_ok=table.header_ok,
+            row_occupancy=table.row_occupancy,
+            col_occupancy=table.col_occupancy,
         )

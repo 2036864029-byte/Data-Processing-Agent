@@ -29,6 +29,8 @@ def healthy_metrics(**overrides: object) -> L1Metrics:
         "empty_region_ratio": 0.05,
         "table_cell_fill": 0.98,
         "row_col_consistency": 0.0,
+        "row_occupancy": 1.0,
+        "col_occupancy": 1.0,
         "reading_order_score": 0.97,
         "bbox_coverage": 0.99,
         "header_footer_leak": 0.01,
@@ -104,7 +106,7 @@ def test_empty_region_fails_with_bbox_when_available() -> None:
 
 
 def test_table_fill_gate_only_applies_to_table_pages() -> None:
-    metrics = healthy_metrics(table_cell_fill=0.4)
+    metrics = healthy_metrics(table_cell_fill=0.4, row_occupancy=0.2)
 
     assert DefectCode.TABLE_STRUCTURE_BROKEN not in codes(page_input(metrics=metrics))
     table_page = page_input(metrics=metrics, has_table=True, table_index=2)
@@ -113,6 +115,28 @@ def test_table_fill_gate_only_applies_to_table_pages() -> None:
         d for d in report.defects if d.code is DefectCode.TABLE_STRUCTURE_BROKEN
     )
     assert defect.location.table_index == 2
+
+
+def test_low_fill_with_complete_structure_is_not_broken() -> None:
+    metrics = healthy_metrics(
+        table_cell_fill=0.5, row_occupancy=1.0, col_occupancy=1.0
+    )
+
+    assert DefectCode.TABLE_STRUCTURE_BROKEN not in codes(
+        page_input(metrics=metrics, has_table=True)
+    )
+
+
+def test_table_page_uses_lower_density_threshold() -> None:
+    table_density = healthy_metrics(char_density=0.6)
+    blank_table = healthy_metrics(char_density=0.4)
+
+    assert DefectCode.LOW_DENSITY not in codes(
+        page_input(metrics=table_density, has_table=True)
+    )
+    assert DefectCode.LOW_DENSITY in codes(
+        page_input(metrics=blank_table, has_table=True)
+    )
 
 
 def test_reading_order_header_footer_and_rotation(  ) -> None:

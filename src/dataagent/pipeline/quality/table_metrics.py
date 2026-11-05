@@ -26,6 +26,8 @@ class TableMetrics:
     cell_fill: float
     column_variance: float
     header_ok: bool
+    row_occupancy: float = 1.0
+    col_occupancy: float = 1.0
 
 
 def table_page_metrics(markdown: str) -> TableMetrics | None:
@@ -35,16 +37,22 @@ def table_page_metrics(markdown: str) -> TableMetrics | None:
         return None
     fills: list[float] = []
     variances: list[float] = []
+    row_occupancies: list[float] = []
+    col_occupancies: list[float] = []
     headers_ok = True
     for header, separator, rows in tables:
         fills.append(_cell_fill(header, rows))
         variances.append(_column_variance(header, rows))
+        row_occupancies.append(_row_occupancy(header, rows))
+        col_occupancies.append(_col_occupancy(header, rows))
         headers_ok = headers_ok and _header_ok(header, separator)
     return TableMetrics(
         tables=len(tables),
         cell_fill=min(fills),
         column_variance=max(variances),
         header_ok=headers_ok,
+        row_occupancy=min(row_occupancies),
+        col_occupancy=min(col_occupancies),
     )
 
 
@@ -111,3 +119,26 @@ def _column_variance(header: list[str], rows: list[list[str]]) -> float:
         return 0.0
     mean = sum(counts) / len(counts)
     return round(sum((count - mean) ** 2 for count in counts) / len(counts), 6)
+
+
+def _row_occupancy(header: list[str], rows: list[list[str]]) -> float:
+    """有任意非空单元格的行占比。"""
+    evaluated = [header, *rows]
+    if not evaluated:
+        return 0.0
+    filled = sum(1 for row in evaluated if any(cell.strip() for cell in row))
+    return round(filled / len(evaluated), 6)
+
+
+def _col_occupancy(header: list[str], rows: list[list[str]]) -> float:
+    """有任意非空单元格的列占比。"""
+    evaluated = [header, *rows]
+    columns = max((len(row) for row in evaluated), default=0)
+    if columns == 0:
+        return 0.0
+    filled = sum(
+        1
+        for index in range(columns)
+        if any(index < len(row) and row[index].strip() for row in evaluated)
+    )
+    return round(filled / columns, 6)

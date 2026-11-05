@@ -16,6 +16,18 @@ def test_well_formed_table() -> None:
     assert metrics.cell_fill == pytest.approx(1.0)
     assert metrics.column_variance == pytest.approx(0.0)
     assert metrics.header_ok is True
+    assert metrics.row_occupancy == pytest.approx(1.0)
+    assert metrics.col_occupancy == pytest.approx(1.0)
+
+
+def test_empty_rows_and_columns_lower_occupancy() -> None:
+    metrics = table_page_metrics(
+        "| a | | |\n|---|---|---|\n| 1 | | |\n| | | |\n"
+    )
+
+    assert metrics is not None
+    assert metrics.row_occupancy == pytest.approx(2 / 3)
+    assert metrics.col_occupancy == pytest.approx(1 / 3)
 
 
 def test_empty_header_is_flagged() -> None:

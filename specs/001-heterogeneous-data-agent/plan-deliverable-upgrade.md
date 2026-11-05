@@ -181,7 +181,10 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 ## 5. 阶段三：规模化细节与消费侧产物
 
 1. **跨页表合并改造**：`_merge_cross_page_tables` 从管道表文本行改为基于 TableGrid（行追加 + 表头沿用），触发条件沿用（上页触底 + 本页页首 + 列数一致 + 表头相似 ≥0.8）；`contracts/table.py::TableGrid` 增 `page_span: tuple[int, int]`（单页表为 `(page_no, page_no)`），合并块 bbox 取起始页表 bbox；黄金集跨页样本先跑对照。
-2. **L1 指标口径切换**：`table_cell_fill` / `table_header_ok` 改由 TableGrid 直接计算（与验收网关同源、更准确）；双口径并行一轮后切换基线，阈值 0.90 不变。
+2. **L1 指标口径切换（PR-3a 先行落地）**：`table_cell_fill` 低于 0.90 不再单独判坏——
+   仅当行列占用率也低（< 0.8）才判 `table_structure_broken`；表页字符密度阈值单独用
+   0.5（P0 初值，B9 固化）。60 页双口径对照：旧口径 41 页失败 → 新口径 24 页，
+   17 页缺口转通过、0 页反向变差。后续再把指标来源切到最终 TableGrid。
 3. **可选第三产物 `<hash>.tables.json`**：仅表格块（grid + rows_text + ID + 页码 + bbox），任务级开关（默认关）；供"只要表格"的结构化消费方。
 4. **落盘布局**：`<输出根>/md/<hash 前 2 位>/<hash>.md` + `<输出根>/json/<hash 前 2 位>/<hash>.json`（+ 可选 `tables/` 同构）。两文件夹 + 一层分桶，不建每文档目录；对象存储下 key 即路径。
 
@@ -262,6 +265,8 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
    无坐标源回退）→ HTML 渲染（含 caption 去重）+ 双表对账测试 → 展示界面可见正确效果；
 2. **PR-2（阶段二）**：contracts 扩充 + 双视图渲染 + delivery 改造 + md/json 对账测试；
 3. **PR-3（阶段三）**：跨页合并结构版 + L1 口径切换 + tables.json 开关 + 分桶布局；
+   - PR-3a（质量口径修复）已先于完整 PR-3 落地：L1 表格结构判定引入行列占用率与
+     表页密度阈值 0.5；完整 PR-3 剩余跨页网格合并、tables.json、分桶；
 4. **PR-4（阶段四）**：交付访问层（下载四项/流式 zip 导出/manifest）+ 交付目标扩展点
    （挂载指引、WebDAV-SMB 插件按需、NL 路由）+ 规模验证（业务量触发）。
 

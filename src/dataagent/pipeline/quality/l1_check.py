@@ -26,6 +26,9 @@ CID_UNMAPPED_RATIO_MAX: Final[float] = 0.01
 EMPTY_REGION_RATIO_MAX: Final[float] = 0.30
 TABLE_CELL_FILL_MIN: Final[float] = 0.90
 ROW_COL_VARIANCE_MAX: Final[float] = 1.0
+ROW_OCCUPANCY_MIN: Final[float] = 0.8
+COL_OCCUPANCY_MIN: Final[float] = 0.8
+TABLE_PAGE_DENSITY_MIN: Final[float] = 0.5
 READING_ORDER_SCORE_MIN: Final[float] = 0.88
 HEADER_FOOTER_LEAK_MAX: Final[float] = 0.05
 
@@ -71,6 +74,8 @@ class L1Metrics:
     # 契约口径：每行列数方差（越小越好）
     row_col_consistency: float | None = None
     table_header_ok: bool | None = None
+    row_occupancy: float | None = None
+    col_occupancy: float | None = None
     reading_order_score: float | None = None
     bbox_coverage: float | None = None
     header_footer_leak: float | None = None
@@ -121,6 +126,8 @@ class L1Checker:
     def _defects(self, page: L1PageInput) -> tuple[Defect, ...]:
         metrics = page.metrics
         threshold = CHAR_DENSITY_MIN_BY_TYPE[page.pdf_type]
+        if page.has_table:
+            threshold = min(threshold, TABLE_PAGE_DENSITY_MIN)
         defects: list[Defect] = []
 
         glyph_low = (
@@ -180,7 +187,21 @@ class L1Checker:
         if page.has_table:
             fill = metrics.table_cell_fill
             variance = metrics.row_col_consistency
-            fill_bad = fill is not None and fill < TABLE_CELL_FILL_MIN
+            occupancy_unknown = (
+                metrics.row_occupancy is None and metrics.col_occupancy is None
+            )
+            structure_incomplete = occupancy_unknown or (
+                metrics.row_occupancy is not None
+                and metrics.row_occupancy < ROW_OCCUPANCY_MIN
+            ) or (
+                metrics.col_occupancy is not None
+                and metrics.col_occupancy < COL_OCCUPANCY_MIN
+            )
+            fill_bad = (
+                fill is not None
+                and fill < TABLE_CELL_FILL_MIN
+                and structure_incomplete
+            )
             variance_bad = variance is not None and variance > ROW_COL_VARIANCE_MAX
             header_bad = metrics.table_header_ok is False
             if fill_bad or variance_bad or header_bad:
@@ -203,6 +224,8 @@ class L1Checker:
                         {
                             "table_cell_fill": fill,
                             "row_col_variance": variance,
+                            "row_occupancy": metrics.row_occupancy,
+                            "col_occupancy": metrics.col_occupancy,
                             "table_header_ok": "false" if header_bad else None,
                         },
                         severity,
