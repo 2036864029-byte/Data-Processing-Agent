@@ -88,6 +88,15 @@
 - 真实年报：md / json / tables 均为 **244 个表 ID** 且完全一致；开关关闭时不生成
   `tables/` 目录。
 
+### 交付清单 manifest（PR-4-1，2026-11-05）
+
+- `TaskConfig.emit_manifest`（默认关）：任务完成后在输出根目录生成
+  `manifest.jsonl`，一行一文档：`doc_id / status / delivery_level / pages /
+  gap_pages / md / json / tables / path / note`。
+- 产物 key 为相对输出根的正斜杠路径（如 `md/52/<hash>.md`），供程序批量遍历、
+  下载与落盘对账。
+- 真实年报：1 行清单，md/json/tables key 与分桶产物一致。
+
 ## [0.1.0] - 2026-11-01
 
 ### 新增

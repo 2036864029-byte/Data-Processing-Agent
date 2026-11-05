@@ -6,6 +6,7 @@ PDF 多页输出、缺口页分级交付、Plan 探路→决策→批量、worke
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -199,3 +200,32 @@ def test_process_pages_worker_entry(
     assert outcome.status == "processed"
     assert outcome.pages == 1
     assert Path(outcome.outputs[0]).is_file()
+
+
+def test_task_writes_manifest_when_enabled(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_bytes(b"alpha document\n")
+    runner = create_builtin_runner(
+        output_dir=tmp_path / "out",
+        config=TaskConfig(emit_manifest=True),
+    )
+
+    outcome = runner.run([tmp_path / "a.txt"], task_id="manifest")
+
+    manifest = tmp_path / "out" / "manifest.jsonl"
+    entries = [
+        json.loads(line)
+        for line in manifest.read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(entries) == 1
+    assert entries[0]["doc_id"] == outcome.documents[0].doc_id
+    assert entries[0]["md"].startswith("md/")
+    assert entries[0]["json"].startswith("json/")
+
+
+def test_manifest_is_off_by_default(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_bytes(b"alpha document\n")
+    runner = create_builtin_runner(output_dir=tmp_path / "out")
+
+    runner.run([tmp_path / "a.txt"], task_id="manifest-off")
+
+    assert not (tmp_path / "out" / "manifest.jsonl").exists()

@@ -330,6 +330,16 @@ class TaskRunner:
                 gap_pages=stats.pages_failed,
                 duration_s=round(stats.duration_s, 3),
             )
+            if self._config.emit_manifest:
+                manifest = self._delivery.write_manifest(
+                    list(outcomes.values())
+                )
+                log_event(
+                    "manifest_written",
+                    task_id=task_id,
+                    path=str(manifest),
+                    documents=len(outcomes),
+                )
 
         return TaskOutcome(
             documents=tuple(outcomes.values()),

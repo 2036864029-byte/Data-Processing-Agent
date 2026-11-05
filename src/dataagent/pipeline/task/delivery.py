@@ -14,6 +14,7 @@ from dataagent.pipeline.output.delivery import (
     decide_delivery,
 )
 from dataagent.pipeline.output.formats import to_csv, to_excel, to_json, to_markdown
+from dataagent.pipeline.output.manifest import write_manifest as write_manifest_file
 from dataagent.pipeline.output.reports import DocSummary, PageDetail
 from dataagent.pipeline.output.structure_view import (
     build_meta,
@@ -397,6 +398,11 @@ class DocumentDeliveryService:
                 context.blocks, fallback=fallback
             ).encode("utf-8")
         return to_markdown(merged, decision).encode("utf-8")
+
+    def write_manifest(
+        self, outcomes: Sequence[DocumentOutcome]
+    ) -> Path:
+        return write_manifest_file(outcomes, self._output_dir)
 
     def report_inputs(
         self,

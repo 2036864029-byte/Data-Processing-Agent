@@ -19,6 +19,7 @@ DEFAULT_FALLBACK: Final[FallbackConfig] = FallbackConfig()
 class TaskConfig:
     output_formats: tuple[str, ...] = ("json", "markdown")
     emit_tables_json: bool = False
+    emit_manifest: bool = False
     batch_pages: int = DEFAULT_BATCH_PAGES
     text_area_cm2: float = DEFAULT_TEXT_AREA_CM2
     gap_tolerance: float = 0.05

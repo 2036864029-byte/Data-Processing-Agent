@@ -222,7 +222,7 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 ### 6.4 manifest：可选索引文件
 
 交付完成后在输出根目录生成：一行一文档（`doc_id / md、json 产物 key / 交付等级 / 页数 / 缺口数`）。
-供程序批量遍历与下载对账；非包、非必经，任务级开关。
+供程序批量遍历与下载对账；非包、非必经，任务级开关。**PR-4-1 已落地**（`manifest.jsonl`）。
 
 ### 6.5 交付目标扩展（可选，插件形态）
 
