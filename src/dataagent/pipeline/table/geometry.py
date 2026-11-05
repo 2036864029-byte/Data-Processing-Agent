@@ -32,6 +32,7 @@ class PositionedText:
     y: float
     width: float
     height: float
+    mcid: int | None = None
 
     @property
     def right(self) -> float:
@@ -77,6 +78,7 @@ def from_pdf_inspector(item: Any) -> PositionedText:
         y=float(item.y),
         width=float(item.width),
         height=float(item.height),
+        mcid=None if getattr(item, "mcid", None) is None else int(item.mcid),
     )
 
 

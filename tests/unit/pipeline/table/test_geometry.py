@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,6 +11,7 @@ from dataagent.pipeline.table.geometry import (
     PositionedText,
     build_table_grid,
     detect_table_regions,
+    from_pdf_inspector,
     items_for_page,
 )
 
@@ -18,6 +20,14 @@ def item(
     text: str, x: float, y: float, *, width: float = 40.0, height: float = 10.0
 ) -> PositionedText:
     return PositionedText(text=text, x=x, y=y, width=width, height=height)
+
+
+def test_from_pdf_inspector_carries_mcid() -> None:
+    raw = SimpleNamespace(text="x", x=1, y=2, width=3, height=4, mcid=7)
+    assert from_pdf_inspector(raw).mcid == 7
+
+    untagged = SimpleNamespace(text="x", x=1, y=2, width=3, height=4, mcid=None)
+    assert from_pdf_inspector(untagged).mcid is None
 
 
 def table_items() -> list[PositionedText]:

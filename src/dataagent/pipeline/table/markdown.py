@@ -56,9 +56,25 @@ def markdown_tables(
     return grids
 
 
+def markdown_table_spans(markdown: str) -> list[tuple[int, int]]:
+    """每个 Markdown 表的行范围 [start, end)，顺序与 markdown_tables 一致。"""
+    return [
+        (start, end) for _, _, start, end in _parse_tables_with_spans(markdown)
+    ]
+
+
 def _parse_tables(markdown: str) -> list[tuple[list[str], list[list[str]]]]:
+    return [
+        (header, rows)
+        for header, rows, _, _ in _parse_tables_with_spans(markdown)
+    ]
+
+
+def _parse_tables_with_spans(
+    markdown: str,
+) -> list[tuple[list[str], list[list[str]], int, int]]:
     lines = markdown.splitlines()
-    tables: list[tuple[list[str], list[list[str]]]] = []
+    tables: list[tuple[list[str], list[list[str]], int, int]] = []
     index = 0
     while index + 1 < len(lines):
         header_line = lines[index]
@@ -74,7 +90,7 @@ def _parse_tables(markdown: str) -> list[tuple[list[str], list[list[str]]]]:
             ):
                 rows.append(_split_row(lines[cursor]))
                 cursor += 1
-            tables.append((header, rows))
+            tables.append((header, rows, index, cursor))
             index = cursor
             continue
         index += 1

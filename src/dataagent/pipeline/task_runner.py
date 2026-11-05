@@ -436,6 +436,7 @@ class TaskRunner:
             page_end=pages[-1],
         ):
             extraction = self._extractor.extract(context, pages, task_id=self._task_id)
+        self._extractor.attach_layout(context, extraction, pages)
         for artifact in extraction.pages:
             context.artifacts[artifact.page_no] = artifact
             self._extractor.backfill_layout(context, artifact, extraction)

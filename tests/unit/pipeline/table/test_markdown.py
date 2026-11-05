@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataagent.pipeline.table.markdown import markdown_tables
+from dataagent.pipeline.table.markdown import markdown_table_spans, markdown_tables
 
 
 def test_parse_single_table() -> None:
@@ -42,3 +42,17 @@ def test_multiple_tables_and_ragged_rows() -> None:
 
 def test_no_table_returns_empty() -> None:
     assert markdown_tables("plain text\n", page_no=1) == []
+
+
+def test_table_spans_align_with_parsed_grids() -> None:
+    markdown = "前文\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n中间\n| c |\n|---|\n| 3 |\n"
+
+    spans = markdown_table_spans(markdown)
+    grids = markdown_tables(markdown, page_no=1)
+
+    assert spans == [(2, 5), (7, 10)]
+    assert len(spans) == len(grids)
+
+
+def test_pipe_lines_without_separator_are_not_a_table() -> None:
+    assert markdown_table_spans("| a | b |\n普通正文\n") == []

@@ -6,17 +6,26 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from dataagent.contracts.errors import DefectCode
-from dataagent.pipeline.merge.merger import merge_document
-from dataagent.pipeline.output.delivery import DeliveryLevel, decide_delivery
+from dataagent.pipeline.merge.merger import MergedDocument, merge_document
+from dataagent.pipeline.output.delivery import (
+    DeliveryDecision,
+    DeliveryLevel,
+    decide_delivery,
+)
 from dataagent.pipeline.output.formats import to_csv, to_excel, to_json, to_markdown
 from dataagent.pipeline.output.reports import DocSummary, PageDetail
 from dataagent.pipeline.repair.fallback import FallbackPath, resolve_fallback
 from dataagent.pipeline.repair.gap import PageGap
+from dataagent.pipeline.sniff.sniffer import Family
+from dataagent.pipeline.structure.build import build_document_blocks
+from dataagent.pipeline.structure.models import DocumentBlocks
+from dataagent.pipeline.structure.render import render_document_markdown
 from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.task.results import DocumentOutcome, TaskStats
 from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event
+from dataagent.platform.plugins.adapters.table_pdfplumber import PdfplumberTableSource
 
 _SUFFIX = {"json": "json", "markdown": "md", "csv": "csv", "excel": "xlsx"}
 
@@ -107,6 +116,9 @@ class DocumentDeliveryService:
             if page in scope
         }
         document = merge_document(doc_id, artifacts, gaps, qualities=qualities)
+        context.merged = document
+        context.blocks = self._build_blocks(context, document)
+        context.layouts.clear()
         decision = decide_delivery(document, gap_tolerance=self._config.gap_tolerance)
         context.merged = document
         context.delivery = decision
@@ -140,6 +152,48 @@ class DocumentDeliveryService:
         )
         return outcome
 
+    def _build_blocks(
+        self, context: DocumentContext, document: MergedDocument
+    ) -> DocumentBlocks | None:
+        source: PdfplumberTableSource | None = None
+        try:
+            if context.routing.family is Family.PDF and context.table_pages:
+                source = PdfplumberTableSource(context.path)
+                blocks = build_document_blocks(
+                    document,
+                    layouts=context.layouts,
+                    ruled_tables=source.extract_page,
+                )
+            else:
+                blocks = build_document_blocks(document, layouts=context.layouts)
+        except Exception as exc:
+            log_event(
+                "table_build_failed",
+                doc_id=context.record.doc_id,
+                reason=type(exc).__name__,
+            )
+            return None
+        finally:
+            if source is not None:
+                source.close()
+        self._attach_build_warnings(context, blocks)
+        return blocks
+
+    def _attach_build_warnings(
+        self, context: DocumentContext, blocks: DocumentBlocks
+    ) -> None:
+        for warning in blocks.warnings:
+            _, _, page_text = warning.partition(":")
+            if not page_text.isdigit():
+                continue
+            page_no = int(page_text)
+            artifact = context.artifacts.get(page_no)
+            if artifact is None:
+                continue
+            context.artifacts[page_no] = artifact.model_copy(
+                update={"warnings": (*artifact.warnings, warning)}
+            )
+
     def _avg_quality(self, context: DocumentContext, scope: set[int]) -> float:
         values = [
             report.extract_quality for page, report in context.reports.items() if page in scope
@@ -151,16 +205,31 @@ class DocumentDeliveryService:
         for context in contexts:
             if context.merged is None or context.delivery is None:
                 continue
+            merged = context.merged
+            decision = context.delivery
             for fmt, target in context.outputs.items():
                 if fmt == "json":
-                    payload = to_json(context.merged, context.delivery).encode("utf-8")
+                    payload = to_json(merged, decision).encode("utf-8")
                 elif fmt == "markdown":
-                    payload = to_markdown(context.merged, context.delivery).encode("utf-8")
+                    payload = self._markdown_payload(context, merged, decision)
                 elif fmt == "csv":
-                    payload = to_csv(context.merged, context.delivery).encode("utf-8")
+                    payload = to_csv(merged, decision).encode("utf-8")
                 else:
-                    payload = to_excel(context.merged, context.delivery)
+                    payload = to_excel(merged, decision)
                 Path(target).write_bytes(payload)
+
+    def _markdown_payload(
+        self,
+        context: DocumentContext,
+        merged: MergedDocument,
+        decision: DeliveryDecision,
+    ) -> bytes:
+        if context.blocks is not None:
+            fallback = {page.page_no: page.markdown for page in merged.pages}
+            return render_document_markdown(
+                context.blocks, fallback=fallback
+            ).encode("utf-8")
+        return to_markdown(merged, decision).encode("utf-8")
 
     def report_inputs(
         self,

@@ -16,6 +16,7 @@ from dataagent.pipeline.output.delivery import DeliveryDecision
 from dataagent.pipeline.repair.gap import PageGap
 from dataagent.pipeline.route.routes import RoutingOutcome
 from dataagent.pipeline.sniff.sniffer import SniffResult
+from dataagent.pipeline.structure.models import DocumentBlocks, PageLayout
 
 
 @dataclass
@@ -31,7 +32,11 @@ class DocumentContext:
     reports: dict[int, PageReport] = field(default_factory=dict)
     gaps: dict[int, PageGap] = field(default_factory=dict)
     processed: set[int] = field(default_factory=set)
+    # PR-1 抽取侧旁车（坐标项/结构角色）；建树后释放
+    layouts: dict[int, PageLayout] = field(default_factory=dict)
+    table_pages: set[int] = field(default_factory=set)
     # 交付阶段
     merged: MergedDocument | None = None
+    blocks: DocumentBlocks | None = None
     delivery: DeliveryDecision | None = None
     outputs: dict[str, str] = field(default_factory=dict)
