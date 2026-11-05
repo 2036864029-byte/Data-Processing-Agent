@@ -37,7 +37,17 @@ def grid(**overrides: object) -> TableGrid:
 def test_valid_grid_roundtrip() -> None:
     value = grid()
 
+    assert value.page_span == (1, 1)
     assert TableGrid.model_validate_json(value.model_dump_json()) == value
+
+
+def test_page_span_defaults_and_validates() -> None:
+    assert grid().page_span == (1, 1)
+    assert grid(page_no=2, page_span=(2, 4)).page_span == (2, 4)
+    with pytest.raises(ValidationError):
+        grid(page_no=2, page_span=(1, 2))
+    with pytest.raises(ValidationError):
+        grid(page_no=1, page_span=(1, 0))
 
 
 def test_invalid_bbox_rejected() -> None:

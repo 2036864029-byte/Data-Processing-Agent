@@ -214,6 +214,7 @@ def test_json_view_has_meta_and_structure() -> None:
     assert table["table_id"] == "t001"
     assert table["rows_text"] == "项目: 合计；金额: 100"
     assert table["grid"]["n_rows"] == 2
+    assert table["grid"]["page_span"] == [1, 1]
 
 
 def test_markdown_view_matches_internal_renderer_and_keeps_gap() -> None:

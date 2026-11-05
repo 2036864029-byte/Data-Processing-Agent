@@ -63,6 +63,7 @@ def _merge_logical_rows(grid: TableGrid) -> TableGrid:
     )
     return TableGrid(
         page_no=grid.page_no,
+        page_span=grid.page_span,
         bbox=grid.bbox,
         n_rows=header_rows + merged.n_rows,
         n_cols=grid.n_cols,
@@ -98,6 +99,7 @@ def _merge_data_rows(grid: TableGrid) -> TableGrid:
             )
     return TableGrid(
         page_no=grid.page_no,
+        page_span=grid.page_span,
         bbox=grid.bbox,
         n_rows=len(groups),
         n_cols=grid.n_cols,

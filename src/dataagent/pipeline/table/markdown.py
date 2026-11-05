@@ -44,6 +44,7 @@ def markdown_tables(
         grids.append(
             TableGrid(
                 page_no=page_no,
+                page_span=(page_no, page_no),
                 bbox=bbox,
                 n_rows=len(rows) + 1,
                 n_cols=n_cols,

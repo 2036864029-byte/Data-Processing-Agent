@@ -49,6 +49,7 @@ class Block:
 class PageBlocks:
     page_no: int
     blocks: tuple[Block, ...] = ()
+    gap: bool = False
 
 
 @dataclass(frozen=True, slots=True)

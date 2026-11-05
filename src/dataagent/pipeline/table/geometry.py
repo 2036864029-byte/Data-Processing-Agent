@@ -220,6 +220,7 @@ def build_table_grid(
     consistency = _column_consistency(rows, len(columns))
     return TableGrid(
         page_no=page_no,
+        page_span=(page_no, page_no),
         bbox=point,
         n_rows=len(rows),
         n_cols=len(columns),

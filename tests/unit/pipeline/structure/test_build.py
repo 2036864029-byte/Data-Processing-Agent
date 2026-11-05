@@ -205,7 +205,9 @@ def test_l0_missed_table_is_inserted_from_geometry() -> None:
 
 
 def test_document_assigns_unique_table_ids_in_reading_order() -> None:
-    document = merged([table_markdown(), table_markdown()])
+    document = merged(
+        [table_markdown(), "前言\n\n" + table_markdown()]
+    )
 
     blocks = build_document_blocks(
         document,
@@ -236,6 +238,7 @@ def test_gap_page_has_no_blocks() -> None:
     )
 
     assert blocks.pages[0].blocks == ()
+    assert blocks.pages[0].gap is True
     assert [block.kind for block in blocks.pages[1].blocks] == ["text"]
 
 
@@ -280,6 +283,7 @@ def test_cross_page_merged_table_becomes_single_block() -> None:
     assert len(tables) == 1
     assert tables[0].table is not None
     assert tables[0].table.grid.n_rows == 3
+    assert tables[0].table.grid.page_span == (1, 2)
 
 
 def prose(length: int) -> str:

@@ -177,3 +177,21 @@ def test_header_rowspan_into_data_is_truncated() -> None:
     assert header[(0, 1)].rowspan == 1
     data = {cell.col: cell.text for cell in merged.cells if cell.row == 1}
     assert data == {0: "A", 1: "2"}
+
+
+def test_page_span_is_preserved() -> None:
+    grid = _grid(
+        (
+            TableCell(row=0, col=0, text="姓名"),
+            TableCell(row=0, col=1, text="职务"),
+            TableCell(row=1, col=0, text="张德芹", rowspan=2),
+            TableCell(row=1, col=1, text="党委书记"),
+            TableCell(row=2, col=1, text="董事长"),
+        ),
+        n_rows=3,
+        n_cols=2,
+    ).model_copy(update={"page_span": (1, 3)})
+
+    merged = merge_logical_rows(grid)
+
+    assert merged.page_span == (1, 3)

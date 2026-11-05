@@ -69,7 +69,7 @@ def build_structure(
     pages: list[PageStructure] = []
     previous_level = 0
     for page in blocks.pages:
-        if not page.blocks:
+        if page.gap:
             continue
         page_blocks: list[TextBlock | TableBlock] = []
         for block in page.blocks:
@@ -159,10 +159,12 @@ def to_markdown_view(
     parts: list[str] = []
     for page_no in page_order:
         page = pages.get(page_no)
-        if page is None or not page.blocks:
+        if page is None:
             text = fallback.get(page_no, "").rstrip("\n")
             if text:
                 parts.append(text)
+            continue
+        if not page.blocks:
             continue
         parts.append(
             "\n\n".join(_render_block(block) for block in page.blocks)

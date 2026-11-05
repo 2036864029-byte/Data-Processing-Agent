@@ -1,7 +1,7 @@
 """合并测试（T108，B7）——FR-017。
 
-按页码重排、跨页表合并（表头列名相似度 + 列数一致性 + 触页边界）、
-标题层级重建、文档级校验；缺口页保留占位、不导致页码错乱（US2 #1）。
+按页码重排、缺口占位、文档级校验；跨页表合并已移至结构层
+（`pipeline/structure/crosspage.py`），标题平滑移至结构视图。
 """
 
 import pytest
@@ -41,7 +41,6 @@ def gap(page_no: int, code: DefectCode = DefectCode.TABLE_STRUCTURE_BROKEN) -> P
 
 TABLE_A = "| item | amount |\n| --- | --- |\n| alpha | 1 |\n"
 TABLE_B = "| item | amount |\n| --- | --- |\n| beta | 2 |\n"
-TABLE_C = "| item | amount |\n| --- | --- |\n| gamma | 3 |\n"
 
 
 def test_pages_are_sorted_by_page_no() -> None:
@@ -70,66 +69,6 @@ def test_gap_page_keeps_placeholder_without_shifting_page_numbers() -> None:
     assert "第 3 页" in placeholder.markdown or "3" in placeholder.markdown
     assert document.gap_pages == (3,)
     assert "page four" in document.pages[3].markdown
-
-
-def test_cross_page_table_merged_on_similar_headers() -> None:
-    document = merge_document(
-        DOC_ID,
-        [artifact(1, "正文\n\n" + TABLE_A), artifact(2, TABLE_B + "尾注\n")],
-        [],
-    )
-
-    first, second = document.pages
-    assert "| beta | 2 |" in first.markdown
-    assert "| alpha | 1 |" in first.markdown
-    assert "| item | amount |" not in second.markdown
-    assert "| beta | 2 |" not in second.markdown
-    assert "尾注" in second.markdown
-
-
-def test_cross_page_table_requires_column_count_match() -> None:
-    wider = "| item | amount | unit |\n| --- | --- | --- |\n| beta | 2 | kg |\n"
-
-    document = merge_document(
-        DOC_ID, [artifact(1, TABLE_A), artifact(2, wider)], []
-    )
-
-    assert "| beta | 2 | kg |" in document.pages[1].markdown
-    assert "| beta | 2 | kg |" not in document.pages[0].markdown
-
-
-def test_cross_page_table_requires_similar_headers() -> None:
-    different = "| name | value |\n| --- | --- |\n| beta | 2 |\n"
-
-    document = merge_document(
-        DOC_ID, [artifact(1, TABLE_A), artifact(2, different)], []
-    )
-
-    assert "| beta | 2 |" in document.pages[1].markdown
-
-
-def test_cross_page_merge_requires_boundary_tables() -> None:
-    document = merge_document(
-        DOC_ID, [artifact(1, TABLE_A + "正文A\n"), artifact(2, TABLE_B)], []
-    )
-
-    assert "| beta | 2 |" in document.pages[1].markdown
-    assert "| beta | 2 |" not in document.pages[0].markdown
-
-
-def test_multi_page_table_chain_merges_into_first_page() -> None:
-    document = merge_document(
-        DOC_ID,
-        [artifact(1, TABLE_A), artifact(2, TABLE_B), artifact(3, TABLE_C)],
-        [],
-    )
-
-    first = document.pages[0].markdown
-    assert "| alpha | 1 |" in first
-    assert "| beta | 2 |" in first
-    assert "| gamma | 3 |" in first
-    assert "| item | amount |" not in document.pages[1].markdown
-    assert "| item | amount |" not in document.pages[2].markdown
 
 
 def test_heading_levels_are_preserved_for_structure_smoothing() -> None:

@@ -128,6 +128,7 @@ def grid_from_table(
     header_rows = 1 if any(cell.row == 0 for cell in cells) else 0
     return TableGrid(
         page_no=page_no,
+        page_span=(page_no, page_no),
         bbox=bbox,
         n_rows=n_rows,
         n_cols=n_cols,

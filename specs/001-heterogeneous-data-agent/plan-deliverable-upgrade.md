@@ -184,7 +184,7 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 
 ## 5. 阶段三：规模化细节与消费侧产物
 
-1. **跨页表合并改造**：`_merge_cross_page_tables` 从管道表文本行改为基于 TableGrid（行追加 + 表头沿用），触发条件沿用（上页触底 + 本页页首 + 列数一致 + 表头相似 ≥0.8）；`contracts/table.py::TableGrid` 增 `page_span: tuple[int, int]`（单页表为 `(page_no, page_no)`），合并块 bbox 取起始页表 bbox；黄金集跨页样本先跑对照。
+1. **跨页表合并改造**：`_merge_cross_page_tables` 从管道表文本行改为基于 TableGrid（行追加 + 表头沿用），触发条件沿用（上页触底 + 本页页首 + 列数一致 + 表头相似 ≥0.8）；`contracts/table.py::TableGrid` 增 `page_span: tuple[int, int]`（单页表为 `(page_no, page_no)`），合并块 bbox 取起始页表 bbox；黄金集跨页样本先跑对照。**PR-3-1 已落地**（`pipeline/structure/crosspage.py`）。
 2. **L1 指标口径切换（PR-3a 先行落地）**：`table_cell_fill` 低于 0.90 不再单独判坏——
    仅当行列占用率也低（< 0.8）才判 `table_structure_broken`；表页字符密度阈值单独用
    0.5（P0 初值，B9 固化）。60 页双口径对照：旧口径 41 页失败 → 新口径 24 页，

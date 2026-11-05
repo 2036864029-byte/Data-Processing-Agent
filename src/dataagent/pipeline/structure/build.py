@@ -21,6 +21,7 @@ from typing import Final
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.merge.merger import MergedDocument, MergedPage
 from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
+from dataagent.pipeline.structure.crosspage import merge_cross_page_tables
 from dataagent.pipeline.structure.models import (
     BBox,
     Block,
@@ -90,11 +91,10 @@ def build_document_blocks(
 ) -> DocumentBlocks:
     pages: list[PageBlocks] = []
     warnings: list[str] = []
-    table_index = 0
     dropped_lines = _running_headers(document.pages)
     for page in document.pages:
         if page.gap:
-            pages.append(PageBlocks(page_no=page.page_no))
+            pages.append(PageBlocks(page_no=page.page_no, gap=True))
             continue
         layout = layouts.get(page.page_no, PageLayout(page_no=page.page_no))
         ruled = tuple(ruled_tables(page.page_no)) if ruled_tables is not None else ()
@@ -105,17 +105,25 @@ def build_document_blocks(
             ruled_tables=ruled,
             dropped_lines=dropped_lines,
         )
+        pages.append(result.page)
+        warnings.extend(result.warnings)
+
+    merged = merge_cross_page_tables(tuple(pages))
+    table_index = 0
+    assigned_pages: list[PageBlocks] = []
+    for merged_page in merged:
         assigned: list[Block] = []
-        for block in result.page.blocks:
+        for block in merged_page.blocks:
             if block.kind == "table" and block.table is not None:
                 table_index += 1
                 slot = replace(block.table, table_id=_table_id(table_index))
                 block = replace(block, table=slot)
             assigned.append(block)
-        pages.append(replace(result.page, blocks=tuple(assigned)))
-        warnings.extend(result.warnings)
+        assigned_pages.append(replace(merged_page, blocks=tuple(assigned)))
     return DocumentBlocks(
-        doc_id=document.doc_id, pages=tuple(pages), warnings=tuple(warnings)
+        doc_id=document.doc_id,
+        pages=tuple(assigned_pages),
+        warnings=tuple(warnings),
     )
 
 

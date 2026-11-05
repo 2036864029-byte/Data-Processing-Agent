@@ -1,25 +1,21 @@
 """页级合并（B7/T111 / FR-017 / PRD 4.7.1）。
 
-按页码重排 → 跨页表合并（表头列名相似度 > 0.8 + 列数一致 + 触页边界）
-→ 标题层级重建 → 文档级校验。
+按页码重排 → 文档级校验。跨页表合并在结构层做
+（`pipeline/structure/crosspage.py`），标题层级平滑在结构视图做
+（`pipeline/output/structure_view.py`）。
 
 缺口页保留占位：页码不跳过，占位标记内嵌（Markdown 可识别注释块）。
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from difflib import SequenceMatcher
-from typing import Final, Protocol
+from typing import Protocol
 
 from dataagent.contracts.artifacts import PageArtifact
 from dataagent.contracts.errors import DefectCode
 from dataagent.pipeline.repair.gap import PageGap
-
-HEADER_SIMILARITY_MIN: Final[float] = 0.8
-_SEPARATOR_CELL_RE: Final[re.Pattern[str]] = re.compile(r":?-{3,}:?")
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +73,6 @@ def merge_document(
     validator: DocumentValidator | None = None,
 ) -> MergedDocument:
     pages = _initial_pages(doc_id, artifacts, gaps, qualities or {})
-    pages = _merge_cross_page_tables(pages)
     validator = validator if validator is not None else NullValidator()
     validation = validator.validate(doc_id, list(pages))
     return MergedDocument(doc_id=doc_id, pages=tuple(pages), validation=validation)
@@ -125,129 +120,3 @@ def _gap_placeholder(gap: PageGap) -> str:
         f"> 【缺口页 {gap.page_no}】内容未还原（{codes}），"
         "已保留占位以维持页码，请人工复核。\n"
     )
-
-
-def _merge_cross_page_tables(pages: list[MergedPage]) -> list[MergedPage]:
-    texts = [page.markdown for page in pages]
-    target: int | None = None
-    target_header: list[str] | None = None
-
-    for index, page in enumerate(pages):
-        if page.gap:
-            target = None
-            target_header = None
-            continue
-
-        lines = texts[index].splitlines()
-        first = _first_table_at_start(lines)
-        if first is not None and target is not None and target_header is not None:
-            start, end = first
-            header = _header_cells(lines[start])
-            if len(header) == len(target_header) and _similar(header, target_header):
-                body_start = start + 1
-                if body_start < end and _is_separator(_split_cells(lines[body_start])):
-                    body_start += 1
-                body = lines[body_start:end]
-                if body:
-                    target_lines = texts[target].splitlines()
-                    last = _last_table_at_end(target_lines)
-                    if last is not None:
-                        _, target_end = last
-                        texts[target] = _join(
-                            target_lines[:target_end] + body + target_lines[target_end:]
-                        )
-                        texts[index] = _join(lines[:start] + lines[end:])
-                        updated = texts[index].splitlines()
-                        new_last = _last_table_at_end(updated)
-                        if new_last is not None:
-                            target = index
-                            target_header = _header_cells(updated[new_last[0]])
-                        continue
-
-        last = _last_table_at_end(lines)
-        if last is not None:
-            target = index
-            target_header = _header_cells(lines[last[0]])
-        else:
-            target = None
-            target_header = None
-
-    return [
-        MergedPage(
-            page_no=page.page_no,
-            markdown=texts[index],
-            gap=page.gap,
-            extract_quality=page.extract_quality,
-            defect_codes=page.defect_codes,
-        )
-        for index, page in enumerate(pages)
-    ]
-
-
-def _table_blocks(lines: list[str]) -> list[tuple[int, int]]:
-    blocks: list[tuple[int, int]] = []
-    index = 0
-    while index < len(lines):
-        if not _is_table_line(lines[index]):
-            index += 1
-            continue
-        start = index
-        while index < len(lines) and _is_table_line(lines[index]):
-            index += 1
-        blocks.append((start, index))
-    return blocks
-
-
-def _first_table_at_start(lines: list[str]) -> tuple[int, int] | None:
-    blocks = _table_blocks(lines)
-    if not blocks:
-        return None
-    start, end = blocks[0]
-    if any(line.strip() for line in lines[:start]):
-        return None
-    return start, end
-
-
-def _last_table_at_end(lines: list[str]) -> tuple[int, int] | None:
-    blocks = _table_blocks(lines)
-    if not blocks:
-        return None
-    start, end = blocks[-1]
-    if any(line.strip() for line in lines[end:]):
-        return None
-    return start, end
-
-
-def _is_table_line(line: str) -> bool:
-    return line.strip().startswith("|")
-
-
-def _split_cells(line: str) -> list[str]:
-    stripped = line.strip()
-    if stripped.startswith("|"):
-        stripped = stripped[1:]
-    if stripped.endswith("|"):
-        stripped = stripped[:-1]
-    return [cell.strip() for cell in stripped.split("|")]
-
-
-def _is_separator(cells: list[str]) -> bool:
-    non_empty = [cell for cell in cells if cell]
-    return bool(non_empty) and all(
-        _SEPARATOR_CELL_RE.fullmatch(cell) for cell in non_empty
-    )
-
-
-def _header_cells(line: str) -> list[str]:
-    return [cell.casefold() for cell in _split_cells(line)]
-
-
-def _similar(left: list[str], right: list[str]) -> bool:
-    ratio = SequenceMatcher(None, "|".join(left), "|".join(right)).ratio()
-    return ratio >= HEADER_SIMILARITY_MIN
-
-
-def _join(lines: list[str]) -> str:
-    if not lines:
-        return ""
-    return "\n".join(lines) + "\n"

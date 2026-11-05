@@ -55,6 +55,17 @@
 - `_normalize_headings` 从 `merger.py` 迁入 `build_structure`：merger 退化为纯页序/缺口组装；
   真实年报 254 个标题的层级/文本序列与迁移前完全一致。
 
+### 跨页表网格级合并（PR-3-1，2026-11-05）
+
+- `contracts/table.py::TableGrid` 增加 `page_span`（默认 `(page_no, page_no)`；
+  起始页必须等于 `page_no`）。
+- 新增 `pipeline/structure/crosspage.py`：相邻页边界、同列数、表头相似 ≥0.8 时按
+  **TableGrid 行追加**合并；续页表格块移除；`page_no` 记起始页、`page_span` 记
+  （起始页, 结束页）、`bbox` 取起始页。
+- `merger.py` 移除文本级跨页表合并，退化为页序/缺口组装；旧跨页测试迁移为网格级测试。
+- 触发条件与旧文本口径一致（上页最后一块为表、本页第一块为表）；构造样本页首有标题时
+  两版均不合并。
+
 ## [0.1.0] - 2026-11-01
 
 ### 新增
