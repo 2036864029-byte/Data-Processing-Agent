@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from dataagent.contracts.errors import DefectCode
+from dataagent.contracts.messages import Verdict
 from dataagent.pipeline.merge.merger import MergedDocument, merge_document
 from dataagent.pipeline.output.delivery import (
     DeliveryDecision,
@@ -19,6 +20,11 @@ from dataagent.pipeline.output.structure_view import (
     build_structure,
     to_json_view,
     to_markdown_view,
+)
+from dataagent.pipeline.quality.gate import QualityResultStore
+from dataagent.pipeline.quality.table_metrics import (
+    grid_table_metrics,
+    table_structure_ok,
 )
 from dataagent.pipeline.repair.fallback import FallbackPath, resolve_fallback
 from dataagent.pipeline.repair.gap import PageGap
@@ -57,10 +63,12 @@ class DocumentDeliveryService:
         output_dir: Path | str,
         config: TaskConfig,
         telemetry: TaskTelemetry,
+        quality_store: QualityResultStore | None = None,
     ) -> None:
         self._output_dir = Path(output_dir)
         self._config = config
         self._telemetry = telemetry
+        self._quality_store = quality_store
 
     def finalize(
         self,
@@ -84,46 +92,62 @@ class DocumentDeliveryService:
                     evidence=(f"plan_stopped:{stopped_by}" if stopped_by else "unprocessed",),
                 )
 
-        fallback = resolve_fallback(
-            self._config.fallback,
-            available_enhancers=self._config.available_enhancers,
-        )
-        gaps = [context.gaps[page] for page in sorted(context.gaps) if page in scope]
-        if fallback.path is FallbackPath.FAIL_DOC and gaps:
-            self._telemetry.record_document(stp=False)
-            log_event(
-                "document_failed",
-                doc_id=doc_id,
-                gap_pages=len(gaps),
-                reason=fallback.reason,
+        source: PdfplumberTableSource | None = None
+        try:
+            if context.routing.family is Family.PDF and context.table_pages:
+                source = PdfplumberTableSource(context.path)
+            self._recover_table_quality(context, scope, source=source)
+            fallback = resolve_fallback(
+                self._config.fallback,
+                available_enhancers=self._config.available_enhancers,
             )
-            return DocumentOutcome(
-                doc_id=doc_id,
-                path=str(context.path),
-                family=context.routing.family.value,
-                status="failed",
-                pages=len(scope),
-                gap_pages=len(gaps),
-                defect_codes=_gap_codes(gaps),
-                fallback_path=fallback.path,
-                note=fallback.reason,
-                avg_extract_quality=self._avg_quality(context, scope),
-                failure_counts=_failure_counts(context),
-            )
+            gaps = [
+                context.gaps[page]
+                for page in sorted(context.gaps)
+                if page in scope
+            ]
+            if fallback.path is FallbackPath.FAIL_DOC and gaps:
+                self._telemetry.record_document(stp=False)
+                log_event(
+                    "document_failed",
+                    doc_id=doc_id,
+                    gap_pages=len(gaps),
+                    reason=fallback.reason,
+                )
+                return DocumentOutcome(
+                    doc_id=doc_id,
+                    path=str(context.path),
+                    family=context.routing.family.value,
+                    status="failed",
+                    pages=len(scope),
+                    gap_pages=len(gaps),
+                    defect_codes=_gap_codes(gaps),
+                    fallback_path=fallback.path,
+                    note=fallback.reason,
+                    avg_extract_quality=self._avg_quality(context, scope),
+                    failure_counts=_failure_counts(context),
+                )
 
-        artifacts = [
-            context.artifacts[page]
-            for page in sorted(context.artifacts)
-            if page in scope and page not in context.gaps
-        ]
-        qualities = {
-            page: report.extract_quality
-            for page, report in context.reports.items()
-            if page in scope
-        }
-        document = merge_document(doc_id, artifacts, gaps, qualities=qualities)
-        context.merged = document
-        context.blocks = self._build_blocks(context, document)
+            artifacts = [
+                context.artifacts[page]
+                for page in sorted(context.artifacts)
+                if page in scope and page not in context.gaps
+            ]
+            qualities = {
+                page: report.extract_quality
+                for page, report in context.reports.items()
+                if page in scope
+            }
+            document = merge_document(
+                doc_id, artifacts, gaps, qualities=qualities
+            )
+            context.merged = document
+            context.blocks = self._build_blocks(
+                context, document, source=source
+            )
+        finally:
+            if source is not None:
+                source.close()
         context.layouts.clear()
         decision = decide_delivery(document, gap_tolerance=self._config.gap_tolerance)
         context.merged = document
@@ -166,13 +190,101 @@ class DocumentDeliveryService:
             self.write_outputs([context])
         return outcome
 
+    def _recover_table_quality(
+        self,
+        context: DocumentContext,
+        scope: set[int],
+        *,
+        source: PdfplumberTableSource | None,
+    ) -> None:
+        """用最终 TableGrid 复核“仅表格结构缺陷”的缺口页，通过则恢复交付。"""
+        candidates = [
+            page_no
+            for page_no in sorted(context.gaps)
+            if page_no in scope and self._table_only_gap(context, page_no)
+        ]
+        if not candidates:
+            return
+        artifacts = [
+            context.artifacts[page]
+            for page in sorted(context.artifacts)
+            if page in scope
+        ]
+        if not artifacts:
+            return
+        qualities = {
+            page: report.extract_quality
+            for page, report in context.reports.items()
+            if page in scope
+        }
+        candidate = merge_document(
+            context.record.doc_id, artifacts, (), qualities=qualities
+        )
+        blocks = self._build_blocks(context, candidate, source=source)
+        if blocks is None:
+            return
+        for page_no in candidates:
+            page_blocks = next(
+                (page for page in blocks.pages if page.page_no == page_no),
+                None,
+            )
+            if page_blocks is None or page_blocks.gap:
+                continue
+            grids = [
+                block.table.grid
+                for block in page_blocks.blocks
+                if block.kind == "table" and block.table is not None
+            ]
+            metrics = grid_table_metrics(grids)
+            if metrics is None or not table_structure_ok(metrics):
+                continue
+            context.gaps.pop(page_no, None)
+            report = context.reports[page_no]
+            updated = report.model_copy(
+                update={
+                    "verdict": Verdict.PASS,
+                    "defects": [],
+                    "attribution": None,
+                    "recommended_action": None,
+                }
+            )
+            context.reports[page_no] = updated
+            if self._quality_store is not None:
+                self._quality_store.save(updated)
+            log_event(
+                "table_quality_recovered",
+                doc_id=context.record.doc_id,
+                page_no=page_no,
+                cell_fill=metrics.cell_fill,
+            )
+
+    def _table_only_gap(
+        self, context: DocumentContext, page_no: int
+    ) -> bool:
+        report = context.reports.get(page_no)
+        if report is None or not report.defects:
+            return False
+        return {defect.code for defect in report.defects} == {
+            DefectCode.TABLE_STRUCTURE_BROKEN
+        }
+
     def _build_blocks(
-        self, context: DocumentContext, document: MergedDocument
+        self,
+        context: DocumentContext,
+        document: MergedDocument,
+        *,
+        source: PdfplumberTableSource | None = None,
     ) -> DocumentBlocks | None:
-        source: PdfplumberTableSource | None = None
+        owns_source = False
         try:
-            if context.routing.family is Family.PDF and context.table_pages:
+            if (
+                source is None
+                and context.routing.family is Family.PDF
+                and context.table_pages
+            ):
                 source = PdfplumberTableSource(context.path)
+                owns_source = True
+            if source is not None:
                 blocks = build_document_blocks(
                     document,
                     layouts=context.layouts,
@@ -188,7 +300,7 @@ class DocumentDeliveryService:
             )
             return None
         finally:
-            if source is not None:
+            if owns_source and source is not None:
                 source.close()
         self._attach_build_warnings(context, blocks)
         return blocks
@@ -204,8 +316,9 @@ class DocumentDeliveryService:
             artifact = context.artifacts.get(page_no)
             if artifact is None:
                 continue
+            warnings = tuple(dict.fromkeys((*artifact.warnings, warning)))
             context.artifacts[page_no] = artifact.model_copy(
-                update={"warnings": (*artifact.warnings, warning)}
+                update={"warnings": warnings}
             )
 
     def _avg_quality(self, context: DocumentContext, scope: set[int]) -> float:

@@ -13,11 +13,19 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from dataagent.contracts.table import TableGrid
+
 _SEPARATOR_CELL: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
 _PIPE: Final[str] = "|"
+
+TABLE_CELL_FILL_MIN: Final[float] = 0.90
+ROW_COL_VARIANCE_MAX: Final[float] = 1.0
+ROW_OCCUPANCY_MIN: Final[float] = 0.8
+COL_OCCUPANCY_MIN: Final[float] = 0.8
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +36,86 @@ class TableMetrics:
     header_ok: bool
     row_occupancy: float = 1.0
     col_occupancy: float = 1.0
+
+
+def table_structure_ok(metrics: TableMetrics) -> bool:
+    """与 L1 表格门控同源的“结构是否可用”判定。"""
+    fill_bad = metrics.cell_fill < TABLE_CELL_FILL_MIN and (
+        metrics.row_occupancy < ROW_OCCUPANCY_MIN
+        or metrics.col_occupancy < COL_OCCUPANCY_MIN
+    )
+    return (
+        not fill_bad
+        and metrics.column_variance <= ROW_COL_VARIANCE_MAX
+        and metrics.header_ok
+    )
+
+
+def grid_table_metrics(
+    grids: Sequence[TableGrid],
+) -> TableMetrics | None:
+    """从最终 TableGrid 直接计算表格指标（与 L0 Markdown 口径并行）。"""
+    if not grids:
+        return None
+    fills: list[float] = []
+    row_occupancies: list[float] = []
+    col_occupancies: list[float] = []
+    headers: list[bool] = []
+    for grid in grids:
+        matrix = _grid_matrix(grid)
+        total = grid.n_rows * grid.n_cols
+        filled = sum(
+            cell.rowspan * cell.colspan
+            for cell in grid.cells
+            if cell.text.strip()
+        )
+        fills.append(filled / total if total else 0.0)
+        row_occupancies.append(_matrix_row_occupancy(matrix))
+        col_occupancies.append(_matrix_col_occupancy(matrix))
+        header_rows = min(max(1, grid.header_rows), grid.n_rows)
+        headers.append(
+            any(
+                matrix[row][col].strip()
+                for row in range(header_rows)
+                for col in range(grid.n_cols)
+            )
+        )
+    return TableMetrics(
+        tables=len(grids),
+        cell_fill=round(min(fills), 6),
+        column_variance=0.0,
+        header_ok=all(headers),
+        row_occupancy=round(min(row_occupancies), 6),
+        col_occupancy=round(min(col_occupancies), 6),
+    )
+
+
+def _grid_matrix(grid: TableGrid) -> list[list[str]]:
+    matrix = [["" for _ in range(grid.n_cols)] for _ in range(grid.n_rows)]
+    for cell in grid.cells:
+        for row in range(cell.row, min(grid.n_rows, cell.row + cell.rowspan)):
+            for col in range(cell.col, min(grid.n_cols, cell.col + cell.colspan)):
+                matrix[row][col] = cell.text
+    return matrix
+
+
+def _matrix_row_occupancy(matrix: Sequence[Sequence[str]]) -> float:
+    if not matrix:
+        return 0.0
+    filled = sum(1 for row in matrix if any(cell.strip() for cell in row))
+    return filled / len(matrix)
+
+
+def _matrix_col_occupancy(matrix: Sequence[Sequence[str]]) -> float:
+    if not matrix or not matrix[0]:
+        return 0.0
+    columns = len(matrix[0])
+    filled = sum(
+        1
+        for col in range(columns)
+        if any(matrix[row][col].strip() for row in range(len(matrix)))
+    )
+    return filled / columns
 
 
 def table_page_metrics(markdown: str) -> TableMetrics | None:

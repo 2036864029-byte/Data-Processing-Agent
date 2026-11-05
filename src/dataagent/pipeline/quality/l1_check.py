@@ -20,14 +20,16 @@ from dataagent.contracts.defects import DEFECT_SPECS, Defect, DefectLocation
 from dataagent.contracts.errors import DefectCode
 from dataagent.contracts.messages import PageReport, Verdict
 from dataagent.contracts.policies import AttributionLabel, PdfType
+from dataagent.pipeline.quality.table_metrics import (
+    COL_OCCUPANCY_MIN,
+    ROW_COL_VARIANCE_MAX,
+    ROW_OCCUPANCY_MIN,
+    TABLE_CELL_FILL_MIN,
+)
 
 GLYPH_COVERAGE_MIN: Final[float] = 0.95
 CID_UNMAPPED_RATIO_MAX: Final[float] = 0.01
 EMPTY_REGION_RATIO_MAX: Final[float] = 0.30
-TABLE_CELL_FILL_MIN: Final[float] = 0.90
-ROW_COL_VARIANCE_MAX: Final[float] = 1.0
-ROW_OCCUPANCY_MIN: Final[float] = 0.8
-COL_OCCUPANCY_MIN: Final[float] = 0.8
 TABLE_PAGE_DENSITY_MIN: Final[float] = 0.5
 READING_ORDER_SCORE_MIN: Final[float] = 0.88
 HEADER_FOOTER_LEAK_MAX: Final[float] = 0.05

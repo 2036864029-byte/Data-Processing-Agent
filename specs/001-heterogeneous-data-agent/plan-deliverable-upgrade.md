@@ -185,10 +185,11 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 ## 5. 阶段三：规模化细节与消费侧产物
 
 1. **跨页表合并改造**：`_merge_cross_page_tables` 从管道表文本行改为基于 TableGrid（行追加 + 表头沿用），触发条件沿用（上页触底 + 本页页首 + 列数一致 + 表头相似 ≥0.8）；`contracts/table.py::TableGrid` 增 `page_span: tuple[int, int]`（单页表为 `(page_no, page_no)`），合并块 bbox 取起始页表 bbox；黄金集跨页样本先跑对照。**PR-3-1 已落地**（`pipeline/structure/crosspage.py`）。
-2. **L1 指标口径切换（PR-3a 先行落地）**：`table_cell_fill` 低于 0.90 不再单独判坏——
-   仅当行列占用率也低（< 0.8）才判 `table_structure_broken`；表页字符密度阈值单独用
-   0.5（P0 初值，B9 固化）。60 页双口径对照：旧口径 41 页失败 → 新口径 24 页，
-   17 页缺口转通过、0 页反向变差。后续再把指标来源切到最终 TableGrid。
+2. **L1 指标口径切换（PR-3a / PR-3-2）**：PR-3a 引入行列占用率与表页密度阈值；
+   PR-3-2 在交付期用最终 TableGrid 复核“仅表格结构缺陷”的缺口页（共享
+   `table_structure_ok`），通过则恢复交付并更新 PageReport。双口径对照：
+   60 页黄金集旧 41 → 新 24 失败；真实年报缺口 99→21→12。
+   后续再把质检期指标来源整体切到 TableGrid。
 3. **可选第三产物 `<hash>.tables.json`**：仅表格块（grid + rows_text + ID + 页码 + bbox），任务级开关（默认关）；供"只要表格"的结构化消费方。
 4. **落盘布局**：`<输出根>/md/<hash 前 2 位>/<hash>.md` + `<输出根>/json/<hash 前 2 位>/<hash>.json`（+ 可选 `tables/` 同构）。两文件夹 + 一层分桶，不建每文档目录；对象存储下 key 即路径。
 

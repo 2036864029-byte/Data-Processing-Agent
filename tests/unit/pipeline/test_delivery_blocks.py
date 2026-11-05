@@ -7,12 +7,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from dataagent.contracts.artifacts import PageArtifact
+from dataagent.contracts.defects import Defect, DefectLocation
+from dataagent.contracts.errors import DefectCode
+from dataagent.contracts.messages import PageReport, Verdict
 from dataagent.pipeline.merge.merger import (
     MergedDocument,
     MergedPage,
     ValidationResult,
 )
 from dataagent.pipeline.output.delivery import decide_delivery
+from dataagent.pipeline.quality import InMemoryQualityResultStore
+from dataagent.pipeline.repair.fallback import FallbackPath
+from dataagent.pipeline.repair.gap import PageGap
 from dataagent.pipeline.sniff.sniffer import Family
 from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.table.geometry import PositionedText
@@ -151,6 +157,86 @@ def test_write_outputs_falls_back_when_blocks_missing(tmp_path: Path) -> None:
     rendered = (tmp_path / "doc.md").read_text(encoding="utf-8")
     assert "| a | b |" in rendered
     assert "<!--table:" not in rendered
+
+
+def table_gap_context(
+    markdown: str, *, extra: tuple[Defect, ...] = ()
+) -> SimpleNamespace:
+    ctx = context(markdown)
+    ctx.gaps = {
+        1: PageGap(
+            doc_id="doc",
+            page_no=1,
+            defect_codes=(DefectCode.TABLE_STRUCTURE_BROKEN,),
+            fallback_used=FallbackPath.MARK_ONLY,
+        )
+    }
+    ctx.reports = {
+        1: PageReport(
+            doc_id="doc",
+            page_no=1,
+            verdict=Verdict.FAIL,
+            extract_quality=0.4,
+            defects=[
+                Defect(
+                    code=DefectCode.TABLE_STRUCTURE_BROKEN,
+                    location=DefectLocation(page_no=1),
+                    severity=0.5,
+                ),
+                *extra,
+            ],
+            qc_confidence=0.8,
+        )
+    }
+    return ctx
+
+
+def test_table_quality_recovered_from_selected_grid(tmp_path: Path) -> None:
+    ctx = table_gap_context("| a | b |\n| --- | --- |\n| 1 | 2 |\n")
+    store = InMemoryQualityResultStore()
+    delivery = DocumentDeliveryService(
+        output_dir=tmp_path,
+        config=TaskConfig(output_formats=("markdown",)),
+        telemetry=TaskTelemetry(),
+        quality_store=store,
+    )
+
+    outcome = delivery.finalize(ctx, None)
+
+    assert 1 not in ctx.gaps
+    assert outcome.gap_pages == 0
+    assert ctx.reports[1].verdict is Verdict.PASS
+    stored = store.load("doc", 1)
+    assert stored is not None and stored.verdict is Verdict.PASS
+    rendered = Path(outcome.outputs[0]).read_text(encoding="utf-8")
+    assert "<table>" in rendered
+
+
+def test_table_gap_with_other_defect_stays_gap(tmp_path: Path) -> None:
+    extra = Defect(
+        code=DefectCode.ENCODING_LOSS,
+        location=DefectLocation(page_no=1),
+        severity=0.5,
+    )
+    ctx = table_gap_context(
+        "| a | b |\n| --- | --- |\n| 1 | 2 |\n", extra=(extra,)
+    )
+
+    outcome = service(tmp_path).finalize(ctx, None)
+
+    assert 1 in ctx.gaps
+    assert outcome.gap_pages == 1
+    rendered = Path(outcome.outputs[0]).read_text(encoding="utf-8")
+    assert "dataagent:gap" in rendered
+
+
+def test_broken_selected_grid_stays_gap(tmp_path: Path) -> None:
+    ctx = table_gap_context("| a |  |\n| --- | --- |\n| 1 |  |\n")
+
+    outcome = service(tmp_path).finalize(ctx, None)
+
+    assert 1 in ctx.gaps
+    assert outcome.gap_pages == 1
 
 
 def test_release_payload_clears_heavy_fields() -> None:

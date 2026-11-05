@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from dataagent.pipeline.quality.table_metrics import table_page_metrics
+from dataagent.contracts.table import TableCell, TableGrid
+from dataagent.pipeline.quality.table_metrics import (
+    grid_table_metrics,
+    table_page_metrics,
+    table_structure_ok,
+)
 
 
 def test_well_formed_table() -> None:
@@ -69,3 +74,75 @@ def test_separator_variants_accepted() -> None:
 
 def test_no_table_returns_none() -> None:
     assert table_page_metrics("plain text only\nno pipes\n") is None
+
+
+def _grid(
+    cells: tuple[TableCell, ...],
+    *,
+    n_rows: int = 2,
+    n_cols: int = 2,
+    header_rows: int = 1,
+) -> TableGrid:
+    return TableGrid(
+        page_no=1,
+        page_span=(1, 1),
+        bbox=(0.0, 0.0, 10.0, 10.0),
+        n_rows=n_rows,
+        n_cols=n_cols,
+        header_rows=header_rows,
+        cells=cells,
+        source_engine="test",
+        confidence=1.0,
+    )
+
+
+def test_grid_metrics_accepts_sparse_financial_table() -> None:
+    grid = _grid(
+        (
+            TableCell(row=0, col=0, text="项目"),
+            TableCell(row=0, col=1, text="金额"),
+            TableCell(row=1, col=0, text="A"),
+            TableCell(row=2, col=1, text="1"),
+        ),
+        n_rows=3,
+    )
+
+    metrics = grid_table_metrics([grid])
+
+    assert metrics is not None
+    assert metrics.cell_fill < 0.9
+    assert metrics.row_occupancy == pytest.approx(1.0)
+    assert metrics.col_occupancy == pytest.approx(1.0)
+    assert table_structure_ok(metrics) is True
+
+
+def test_grid_metrics_rejects_empty_structure() -> None:
+    grid = _grid(
+        (
+            TableCell(row=0, col=0, text="项目"),
+            TableCell(row=0, col=1, text="金额"),
+            TableCell(row=1, col=0, text="A"),
+        ),
+        n_rows=3,
+    )
+
+    metrics = grid_table_metrics([grid])
+
+    assert metrics is not None
+    assert metrics.row_occupancy < 1.0
+    assert table_structure_ok(metrics) is False
+
+
+def test_grid_metrics_rejects_missing_header() -> None:
+    grid = _grid(
+        (
+            TableCell(row=1, col=0, text="A"),
+            TableCell(row=1, col=1, text="1"),
+        )
+    )
+
+    metrics = grid_table_metrics([grid])
+
+    assert metrics is not None
+    assert metrics.header_ok is False
+    assert table_structure_ok(metrics) is False

@@ -155,6 +155,7 @@ class TaskRunner:
             output_dir=output_dir,
             config=self._config,
             telemetry=self._telemetry,
+            quality_store=self._quality_store,
         )
         self._plan_stage = PlanStageService(
             plan=self._config.plan,
