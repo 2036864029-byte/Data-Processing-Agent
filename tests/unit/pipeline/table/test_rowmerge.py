@@ -150,3 +150,30 @@ def test_colspan_rows_are_not_merged() -> None:
     )
 
     assert merge_logical_rows(grid) is grid
+
+
+def test_header_rowspan_into_data_is_truncated() -> None:
+    grid = TableGrid(
+        page_no=1,
+        bbox=(0, 0, 1, 1),
+        n_rows=3,
+        n_cols=2,
+        header_rows=1,
+        cells=(
+            TableCell(row=0, col=0, text="项目"),
+            TableCell(row=0, col=1, text="金额", rowspan=2),
+            TableCell(row=1, col=0, text="A", rowspan=2),
+            TableCell(row=2, col=1, text="2"),
+        ),
+        source_engine="test",
+        confidence=1.0,
+    )
+
+    merged = merge_logical_rows(grid)
+
+    assert merged.n_rows == 2
+    assert merged.header_rows == 1
+    header = {(cell.row, cell.col): cell for cell in merged.cells if cell.row == 0}
+    assert header[(0, 1)].rowspan == 1
+    data = {cell.col: cell.text for cell in merged.cells if cell.row == 1}
+    assert data == {0: "A", 1: "2"}

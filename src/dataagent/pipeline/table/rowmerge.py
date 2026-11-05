@@ -22,13 +22,26 @@ TEXT_JOINER = "\n"
 
 
 def merge_logical_rows(grid: TableGrid) -> TableGrid:
-    """按 rowspan 证据把物理行合并为逻辑行；表头行原样保留。"""
+    """按 rowspan 证据把物理行合并为逻辑行；表头行原样保留，异常时保守回退。"""
+    try:
+        return _merge_logical_rows(grid)
+    except ValueError:
+        return grid
+
+
+def _merge_logical_rows(grid: TableGrid) -> TableGrid:
     if grid.n_rows <= 1 or not grid.cells:
         return grid
     header_rows = min(grid.header_rows, grid.n_rows)
     if grid.n_rows - header_rows <= 1:
         return grid
-    header_cells = tuple(cell for cell in grid.cells if cell.row < header_rows)
+    header_cells = tuple(
+        cell.model_copy(
+            update={"rowspan": min(cell.rowspan, header_rows - cell.row)}
+        )
+        for cell in grid.cells
+        if cell.row < header_rows
+    )
     data_cells = tuple(
         cell.model_copy(update={"row": cell.row - header_rows})
         for cell in grid.cells
@@ -48,12 +61,15 @@ def merge_logical_rows(grid: TableGrid) -> TableGrid:
         cell.model_copy(update={"row": cell.row + header_rows})
         for cell in merged.cells
     )
-    return grid.model_copy(
-        update={
-            "n_rows": header_rows + merged.n_rows,
-            "header_rows": header_rows,
-            "cells": cells,
-        }
+    return TableGrid(
+        page_no=grid.page_no,
+        bbox=grid.bbox,
+        n_rows=header_rows + merged.n_rows,
+        n_cols=grid.n_cols,
+        header_rows=header_rows,
+        cells=cells,
+        source_engine=grid.source_engine,
+        confidence=grid.confidence,
     )
 
 
