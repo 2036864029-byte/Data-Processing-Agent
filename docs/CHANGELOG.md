@@ -10,6 +10,18 @@
 
 ## [未发布]
 
+### 交付访问层（PR-4-2，2026-11-05）
+
+- 新增 `GET /download/<relative_key>`：按 manifest 的相对 key 下发单文件。
+  key 解析统一在 `apps/api/downloads.py`，拒绝绝对路径、`..`、反斜杠与控制字符；
+  解析后（含符号链接）必须仍在输出根内。
+- 新增 `GET /download/zip?keys=a,b`：按需流式 zip，边读边压边传、不落盘、
+  无 `Content-Length`；任一 key 非法 400、缺失 404（在开始流式前判定）。
+- 新增 `GET /manifest`：下发 `manifest.jsonl`（`application/x-ndjson`）。
+- API 经 `output_dir` 注入输出根（`Settings.output_dir`，默认 `var/output`）；
+  未配置时下载端点 503，`/health`、`/status` 不受影响。
+- compose 的 api / worker 共享 `outputs` 卷挂到 `/app/var/output`。
+
 ### 交付产物阶段一（PR-1，2026-11-05）
 
 - 表格择优接入主链路：抽取侧坐标项（按 `pages_with_tables` 门控）与结构元素旁车，

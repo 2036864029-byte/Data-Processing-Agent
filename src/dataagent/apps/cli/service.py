@@ -9,6 +9,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 from dataagent.apps.api.server import create_server
 from dataagent.apps.api.status import EmptyStatusProvider, StatusProvider
@@ -53,6 +54,7 @@ def start_service(
     role: str = "api",
     provider: StatusProvider | None = None,
     worker_target: WorkerTarget | None = None,
+    output_dir: Path | str | None = None,
 ) -> RunningService:
     """启动 API（role=api/all）与可选 worker 线程；返回可停止的运行句柄。"""
     if role not in {"api", "all", "worker"}:
@@ -62,7 +64,12 @@ def start_service(
     server: ThreadingHTTPServer | None = None
     url = "worker"
     if role in {"api", "all"}:
-        server = create_server(host, port, provider or EmptyStatusProvider())
+        server = create_server(
+            host,
+            port,
+            provider or EmptyStatusProvider(),
+            output_dir=output_dir,
+        )
         threading.Thread(target=server.serve_forever, daemon=True).start()
         url = f"http://{host}:{server.server_address[1]}"
         print(url, flush=True)

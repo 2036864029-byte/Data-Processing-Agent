@@ -176,7 +176,11 @@ def _run_up(args: argparse.Namespace) -> int:
 
     worker_target = _build_worker_target(settings) if args.role == "all" else None
     service = start_service(
-        host=host, port=port, role=args.role, worker_target=worker_target
+        host=host,
+        port=port,
+        role=args.role,
+        worker_target=worker_target,
+        output_dir=settings.output_dir,
     )
     service.wait()
     return 0

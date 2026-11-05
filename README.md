@@ -46,6 +46,18 @@ dataagent bench --sample <pdf> [--repeats N] [--batch-pages N]
 
 CLI 是唯一入口，Web 由 CLI 拉起；API 无状态、worker 无状态（任务归属靠队列）。
 
+## HTTP 端点
+
+| 端点 | 说明 |
+| ---- | ---- |
+| `GET /health` | 健康检查 |
+| `GET /status` | 任务 / 队列 / worker 只读页（每 5s 刷新） |
+| `GET /download/<key>` | 单文件下载；key 相对 `output_dir`（如 `md/52/<hash>.md`） |
+| `GET /download/zip?keys=a,b` | 按需流式 zip（不落盘）；多选批量由前端并发单文件下载 |
+| `GET /manifest` | 下发 `manifest.jsonl`（未生成时 404） |
+
+输出根由 `output_dir`（默认 `var/output`，可用 `DATAAGENT_OUTPUT_DIR` 覆盖）指定。
+
 ## P0-B 已落地能力
 
 - 接入与体检：folder/upload、内容哈希去重、11 项三态体检、待确认队列

@@ -219,6 +219,10 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 | 打包下载 | 服务端**按需流式 zip**：点击时边读散文件边压缩边传，不落盘、不占存储——是下载动作，**不是交付格式** |
 | manifest 下载 | 交付清单下载，供程序批量消费 |
 
+**PR-4-2 已落地**：`GET /download/<relative_key>`、`GET /download/zip?keys=...`、
+`GET /manifest`；输出根经 `Settings.output_dir` 注入 API，key 解析与穿越防护
+集中在 `apps/api/downloads.py`。多选批量由前端并发单文件下载，服务端不另做接口。
+
 ### 6.4 manifest：可选索引文件
 
 交付完成后在输出根目录生成：一行一文档（`doc_id / md、json 产物 key / 交付等级 / 页数 / 缺口数`）。

@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     # API / 交付
     api_host: str = "127.0.0.1"
     api_port: int = 8080
+    output_dir: Path = Path("var/output")
 
     @classmethod
     def settings_customise_sources(

@@ -35,3 +35,4 @@ plan_max_wall_time_s: 3600
 # API / 交付
 api_host: 127.0.0.1
 api_port: 8080
+output_dir: var/output            # 交付产物根目录（/download 与 /manifest 只读此目录）
