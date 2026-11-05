@@ -190,8 +190,8 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
    `table_structure_ok`），通过则恢复交付并更新 PageReport。双口径对照：
    60 页黄金集旧 41 → 新 24 失败；真实年报缺口 99→21→12。
    后续再把质检期指标来源整体切到 TableGrid。
-3. **可选第三产物 `<hash>.tables.json`**：仅表格块（grid + rows_text + ID + 页码 + bbox），任务级开关（默认关）；供"只要表格"的结构化消费方。
-4. **落盘布局**：`<输出根>/md/<hash 前 2 位>/<hash>.md` + `<输出根>/json/<hash 前 2 位>/<hash>.json`（+ 可选 `tables/` 同构）。两文件夹 + 一层分桶，不建每文档目录；对象存储下 key 即路径。
+3. **可选第三产物 `<hash>.tables.json`**：仅表格块（grid + rows_text + ID + 页码 + bbox），任务级开关（默认关）；供“只要表格”的结构化消费方。**PR-3-3 已落地**。
+4. **落盘布局**：`<输出根>/md/<hash 前 2 位>/<hash>.md` + `<输出根>/json/<hash 前 2 位>/<hash>.json`（+ 可选 `tables/` 同构）。两文件夹 + 一层分桶，不建每文档目录；对象存储下 key 即路径。**PR-3-3 已落地**。
 
 **验收**：跨页样本合并结果与旧口径对照无回归；tables.json 开关开/关产物一致性测试；分桶下单目录条目数 ≤ 数百。
 

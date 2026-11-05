@@ -149,6 +149,32 @@ def to_json_view(
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def to_tables_json(
+    structure: DocumentStructure | None, *, doc_id: str
+) -> str:
+    """可选第三产物：只含表格块的结构化 JSON。"""
+    tables: list[dict[str, Any]] = []
+    if structure is not None:
+        for page in structure.pages:
+            for block in page.blocks:
+                if not isinstance(block, TableBlock):
+                    continue
+                tables.append(
+                    {
+                        "table_id": block.table_id,
+                        "block_id": block.block_id,
+                        "page_no": block.page_no,
+                        "page_span": list(block.grid.page_span),
+                        "bbox": list(block.bbox),
+                        "caption": block.caption,
+                        "rows_text": block.rows_text,
+                        "grid": block.grid.model_dump(mode="json"),
+                    }
+                )
+    payload = {"doc_id": doc_id, "tables": tables}
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 def to_markdown_view(
     structure: DocumentStructure,
     *,

@@ -78,6 +78,16 @@
 - 已知：恢复页的 `extract_quality` 沿用旧 L0 值（保守），恢复判定只清理
   `TABLE_STRUCTURE_BROKEN`。
 
+### tables.json 与分桶落盘（PR-3-3，2026-11-05）
+
+- `TaskConfig.emit_tables_json`（默认关）：可选第三产物 `<doc>.tables.json`，
+  仅表格块（`table_id/block_id/page_no/page_span/bbox/caption/rows_text/grid`）。
+- 落盘布局切到契约：`md/<hash 前2位>/<hash>.md`、
+  `json/<hash 前2位>/<hash>.json`、`tables/<hash 前2位>/<hash>.tables.json`；
+  csv/excel 保持扁平派生视图。
+- 真实年报：md / json / tables 均为 **244 个表 ID** 且完全一致；开关关闭时不生成
+  `tables/` 目录。
+
 ## [0.1.0] - 2026-11-01
 
 ### 新增

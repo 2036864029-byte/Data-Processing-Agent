@@ -20,6 +20,7 @@ from dataagent.pipeline.output.structure_view import (
     build_structure,
     to_json_view,
     to_markdown_view,
+    to_tables_json,
 )
 from dataagent.pipeline.quality.gate import QualityResultStore
 from dataagent.pipeline.quality.table_metrics import (
@@ -39,7 +40,13 @@ from dataagent.pipeline.telemetry import TaskTelemetry
 from dataagent.platform.observe.log import log_event, span
 from dataagent.platform.plugins.adapters.table_pdfplumber import PdfplumberTableSource
 
-_SUFFIX = {"json": "json", "markdown": "md", "csv": "csv", "excel": "xlsx"}
+_SUFFIX = {
+    "json": "json",
+    "markdown": "md",
+    "csv": "csv",
+    "excel": "xlsx",
+    "tables_json": "tables.json",
+}
 
 
 def _gap_codes(gaps: Sequence[PageGap]) -> tuple[DefectCode, ...]:
@@ -158,10 +165,14 @@ class DocumentDeliveryService:
             context.structure = None
             context.meta = None
         context.delivery = decision
+        formats = [
+            fmt for fmt in self._config.output_formats if fmt in _SUFFIX
+        ]
+        if self._config.emit_tables_json:
+            formats.append("tables_json")
         context.outputs = {
-            fmt: str(self._output_dir / f"{doc_id}.{_SUFFIX[fmt]}")
-            for fmt in self._config.output_formats
-            if fmt in _SUFFIX
+            fmt: str(self._output_path(fmt, doc_id))
+            for fmt in dict.fromkeys(formats)
         }
         outcome = DocumentOutcome(
             doc_id=doc_id,
@@ -346,9 +357,27 @@ class DocumentDeliveryService:
                     payload = self._markdown_payload(context, merged, decision)
                 elif fmt == "csv":
                     payload = to_csv(merged, decision).encode("utf-8")
+                elif fmt == "tables_json":
+                    payload = to_tables_json(
+                        context.structure, doc_id=context.record.doc_id
+                    ).encode("utf-8")
                 else:
                     payload = to_excel(merged, decision)
-                Path(target).write_bytes(payload)
+                target_path = Path(target)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                target_path.write_bytes(payload)
+
+    def _output_path(self, fmt: str, doc_id: str) -> Path:
+        bucket = doc_id[:2]
+        if fmt == "markdown":
+            return self._output_dir / "md" / bucket / f"{doc_id}.md"
+        if fmt == "json":
+            return self._output_dir / "json" / bucket / f"{doc_id}.json"
+        if fmt == "tables_json":
+            return (
+                self._output_dir / "tables" / bucket / f"{doc_id}.tables.json"
+            )
+        return self._output_dir / f"{doc_id}.{_SUFFIX[fmt]}"
 
     def _markdown_payload(
         self,

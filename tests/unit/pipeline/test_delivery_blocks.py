@@ -73,11 +73,16 @@ def context(
 
 
 def service(
-    tmp_path: Path, formats: tuple[str, ...] = ("markdown",)
+    tmp_path: Path,
+    formats: tuple[str, ...] = ("markdown",),
+    *,
+    emit_tables_json: bool = False,
 ) -> DocumentDeliveryService:
     return DocumentDeliveryService(
         output_dir=tmp_path,
-        config=TaskConfig(output_formats=formats),
+        config=TaskConfig(
+            output_formats=formats, emit_tables_json=emit_tables_json
+        ),
         telemetry=TaskTelemetry(),
     )
 
@@ -237,6 +242,45 @@ def test_broken_selected_grid_stays_gap(tmp_path: Path) -> None:
 
     assert 1 in ctx.gaps
     assert outcome.gap_pages == 1
+
+
+def test_bucketed_paths_and_optional_tables_json(tmp_path: Path) -> None:
+    ctx = context("| a | b |\n| --- | --- |\n| 1 | 2 |\n")
+    delivery = service(
+        tmp_path, ("json", "markdown"), emit_tables_json=True
+    )
+
+    outcome = delivery.finalize(ctx, None)
+
+    md_path = next(p for p in outcome.outputs if p.endswith(".md"))
+    json_path = next(
+        p
+        for p in outcome.outputs
+        if p.endswith(".json") and not p.endswith(".tables.json")
+    )
+    tables_path = next(
+        p for p in outcome.outputs if p.endswith(".tables.json")
+    )
+    assert md_path == str(tmp_path / "md" / "do" / "doc.md")
+    assert json_path == str(tmp_path / "json" / "do" / "doc.json")
+    assert tables_path == str(
+        tmp_path / "tables" / "do" / "doc.tables.json"
+    )
+    assert all(Path(path).is_file() for path in outcome.outputs)
+    payload = json.loads(Path(tables_path).read_text(encoding="utf-8"))
+    assert len(payload["tables"]) == 1
+    assert payload["tables"][0]["table_id"] == "t001"
+
+
+def test_tables_json_is_off_by_default(tmp_path: Path) -> None:
+    ctx = context("| a | b |\n| --- | --- |\n| 1 | 2 |\n")
+
+    outcome = service(tmp_path).finalize(ctx, None)
+
+    assert not any(
+        path.endswith(".tables.json") for path in outcome.outputs
+    )
+    assert not (tmp_path / "tables").exists()
 
 
 def test_release_payload_clears_heavy_fields() -> None:

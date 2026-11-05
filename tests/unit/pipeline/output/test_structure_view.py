@@ -18,6 +18,7 @@ from dataagent.pipeline.output.structure_view import (
     rows_text,
     to_json_view,
     to_markdown_view,
+    to_tables_json,
 )
 from dataagent.pipeline.structure.build import build_document_blocks
 from dataagent.pipeline.structure.render import render_document_markdown
@@ -215,6 +216,30 @@ def test_json_view_has_meta_and_structure() -> None:
     assert table["rows_text"] == "项目: 合计；金额: 100"
     assert table["grid"]["n_rows"] == 2
     assert table["grid"]["page_span"] == [1, 1]
+
+
+def test_tables_json_contains_only_table_blocks() -> None:
+    source = document()
+    blocks = build_document_blocks(source, layouts={})
+    structure = build_structure(blocks, doc_id="doc")
+
+    payload = json.loads(to_tables_json(structure, doc_id="doc"))
+
+    assert payload["doc_id"] == "doc"
+    assert len(payload["tables"]) == 1
+    table = payload["tables"][0]
+    assert table["table_id"] == "t001"
+    assert table["page_no"] == 1
+    assert table["page_span"] == [1, 1]
+    assert table["rows_text"] == "项目: 合计；金额: 100"
+    assert table["grid"]["n_rows"] == 2
+    assert "structure" not in payload
+
+
+def test_tables_json_handles_missing_structure() -> None:
+    payload = json.loads(to_tables_json(None, doc_id="doc"))
+
+    assert payload == {"doc_id": "doc", "tables": []}
 
 
 def test_markdown_view_matches_internal_renderer_and_keeps_gap() -> None:
