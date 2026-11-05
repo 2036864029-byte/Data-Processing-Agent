@@ -179,8 +179,8 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 **验收**：对账测试通过；黄金集 60 页标题层级与现行 `_normalize_headings` 输出一致；同一结构树渲染两视图，表格 ID、标题路径、行数全部一致。
 
 > **PR-2 落地注记（2026-11-05）**：契约字段、结构视图（`pipeline/output/structure_view.py`）、
-> `{meta, structure}` JSON、`rows_text` 与 md/json 对账已落地。`_normalize_headings`
-> 迁入结构树与流式交付暂缓至 PR-2b。
+> `{meta, structure}` JSON、`rows_text` 与 md/json 对账已落地。PR-2b 已完成：
+> `_normalize_headings` 迁入结构树、每文档 finalize 即写盘并释放重负载上下文。
 
 ## 5. 阶段三：规模化细节与消费侧产物
 

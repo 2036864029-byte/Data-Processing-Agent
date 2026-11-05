@@ -30,7 +30,7 @@ from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.task.results import DocumentOutcome, TaskStats
 from dataagent.pipeline.telemetry import TaskTelemetry
-from dataagent.platform.observe.log import log_event
+from dataagent.platform.observe.log import log_event, span
 from dataagent.platform.plugins.adapters.table_pdfplumber import PdfplumberTableSource
 
 _SUFFIX = {"json": "json", "markdown": "md", "csv": "csv", "excel": "xlsx"}
@@ -162,6 +162,8 @@ class DocumentDeliveryService:
             gap_pages=len(document.gap_pages),
             delivery_level=decision.level.value,
         )
+        with span("output", doc_id=doc_id, stage="output"):
+            self.write_outputs([context])
         return outcome
 
     def _build_blocks(

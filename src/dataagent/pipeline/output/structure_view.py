@@ -67,6 +67,7 @@ def build_structure(
 
     block_index = 0
     pages: list[PageStructure] = []
+    previous_level = 0
     for page in blocks.pages:
         if not page.blocks:
             continue
@@ -88,6 +89,10 @@ def build_structure(
                     )
                 )
             else:
+                level = block.level
+                if block.kind == "heading" and level is not None:
+                    level = min(level, previous_level + 1)
+                    previous_level = level
                 page_blocks.append(
                     TextBlock(
                         block_id=block_id,
@@ -95,7 +100,7 @@ def build_structure(
                         bbox=block.bbox,
                         text=block.text,
                         role="heading" if block.kind == "heading" else "body",
-                        level=block.level,
+                        level=level,
                     )
                 )
         pages.append(

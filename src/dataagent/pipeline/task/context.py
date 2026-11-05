@@ -44,3 +44,11 @@ class DocumentContext:
     meta: dict[str, Any] | None = None
     delivery: DeliveryDecision | None = None
     outputs: dict[str, str] = field(default_factory=dict)
+
+    def release_payload(self) -> None:
+        """交付写盘后释放重负载字段，保留缺口 / 报告 / 产物路径。"""
+        self.merged = None
+        self.blocks = None
+        self.structure = None
+        self.meta = None
+        self.layouts.clear()

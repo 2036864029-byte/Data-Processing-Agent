@@ -19,7 +19,6 @@ from dataagent.contracts.errors import DefectCode
 from dataagent.pipeline.repair.gap import PageGap
 
 HEADER_SIMILARITY_MIN: Final[float] = 0.8
-_HEADING_RE: Final[re.Pattern[str]] = re.compile(r"^(#{1,6})\s+(.*)$")
 _SEPARATOR_CELL_RE: Final[re.Pattern[str]] = re.compile(r":?-{3,}:?")
 
 
@@ -79,7 +78,6 @@ def merge_document(
 ) -> MergedDocument:
     pages = _initial_pages(doc_id, artifacts, gaps, qualities or {})
     pages = _merge_cross_page_tables(pages)
-    pages = _normalize_headings(pages)
     validator = validator if validator is not None else NullValidator()
     validation = validator.validate(doc_id, list(pages))
     return MergedDocument(doc_id=doc_id, pages=tuple(pages), validation=validation)
@@ -184,37 +182,6 @@ def _merge_cross_page_tables(pages: list[MergedPage]) -> list[MergedPage]:
         )
         for index, page in enumerate(pages)
     ]
-
-
-def _normalize_headings(pages: list[MergedPage]) -> list[MergedPage]:
-    previous_level = 0
-    normalized: list[MergedPage] = []
-    for page in pages:
-        if page.gap:
-            normalized.append(page)
-            continue
-        lines = page.markdown.splitlines()
-        changed = False
-        for index, line in enumerate(lines):
-            match = _HEADING_RE.match(line)
-            if match is None:
-                continue
-            level = len(match.group(1))
-            new_level = min(level, previous_level + 1)
-            previous_level = new_level
-            if new_level != level:
-                lines[index] = "#" * new_level + " " + match.group(2)
-                changed = True
-        normalized.append(
-            MergedPage(
-                page_no=page.page_no,
-                markdown=_join(lines) if changed else page.markdown,
-                gap=page.gap,
-                extract_quality=page.extract_quality,
-                defect_codes=page.defect_codes,
-            )
-        )
-    return normalized
 
 
 def _table_blocks(lines: list[str]) -> list[tuple[int, int]]:

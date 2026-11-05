@@ -17,6 +17,7 @@ from dataagent.pipeline.sniff.sniffer import Family
 from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.task.config import TaskConfig
+from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.task.delivery import DocumentDeliveryService
 from dataagent.pipeline.telemetry import TaskTelemetry
 
@@ -81,6 +82,7 @@ def test_finalize_builds_blocks_and_markdown_uses_html_table(tmp_path: Path) -> 
     delivery = service(tmp_path)
 
     outcome = delivery.finalize(ctx, None)
+    assert Path(outcome.outputs[0]).is_file()
     delivery.write_outputs([ctx])
 
     rendered = Path(outcome.outputs[0]).read_text(encoding="utf-8")
@@ -149,3 +151,26 @@ def test_write_outputs_falls_back_when_blocks_missing(tmp_path: Path) -> None:
     rendered = (tmp_path / "doc.md").read_text(encoding="utf-8")
     assert "| a | b |" in rendered
     assert "<!--table:" not in rendered
+
+
+def test_release_payload_clears_heavy_fields() -> None:
+    context = DocumentContext(
+        record=SimpleNamespace(doc_id="doc"),
+        path=Path("doc.txt"),
+        sniff=SimpleNamespace(),
+        routing=SimpleNamespace(family=Family.TEXT),
+        universe=(1,),
+    )
+    context.merged = SimpleNamespace()
+    context.blocks = SimpleNamespace()
+    context.structure = SimpleNamespace()
+    context.meta = {"doc_id": "doc"}
+    context.layouts[1] = PageLayout(page_no=1)
+
+    context.release_payload()
+
+    assert context.merged is None
+    assert context.blocks is None
+    assert context.structure is None
+    assert context.meta is None
+    assert context.layouts == {}

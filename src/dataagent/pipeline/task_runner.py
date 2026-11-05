@@ -253,6 +253,7 @@ class TaskRunner:
                         outcome,
                     )
                 done_pages += len(context.universe)
+                context.release_payload()
                 self._control.record_progress(
                     "running",
                     done=done_pages,
@@ -280,8 +281,6 @@ class TaskRunner:
                         note="内容哈希重复，复用已有结果",
                     )
 
-            with span("output", stage="output"):
-                self._delivery.write_outputs(analyzed)
             if analyzed:
                 processed_docs = sum(1 for item in outcomes.values() if item.status == "processed")
                 failed_docs = sum(1 for item in outcomes.values() if item.status == "failed")
@@ -381,14 +380,13 @@ class TaskRunner:
             self._control.advance(Event.PARSE_DONE)
             with span("finalize", doc_id=result.record.doc_id, stage="merge"):
                 outcome = self._delivery.finalize(result, None, only_pages=requested)
+            result.release_payload()
             for event in self._control.completion_events(
                 processed_docs=1 if outcome.status == "processed" else 0,
                 failed_docs=1 if outcome.status == "failed" else 0,
                 gap_pages=outcome.gap_pages,
             ):
                 self._control.advance(event)
-            with span("output", stage="output"):
-                self._delivery.write_outputs([result])
             self._control.finish()
             self._control.record_progress(
                 "finished",

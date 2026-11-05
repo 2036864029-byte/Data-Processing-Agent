@@ -48,6 +48,13 @@
   p25 人员表 `rows_text` 13 行（每行一人）。
 - 暂缓：`_normalize_headings` 迁入结构树、流式交付（PR-2b）。
 
+### 流式交付与标题迁移（PR-2b，2026-11-05）
+
+- `DocumentDeliveryService.finalize` 每文档合格即写盘 md/json；任务收尾不再统一写；
+  `DocumentContext.release_payload()` 在写盘后释放 merged / blocks / structure / meta / layouts。
+- `_normalize_headings` 从 `merger.py` 迁入 `build_structure`：merger 退化为纯页序/缺口组装；
+  真实年报 254 个标题的层级/文本序列与迁移前完全一致。
+
 ## [0.1.0] - 2026-11-01
 
 ### 新增

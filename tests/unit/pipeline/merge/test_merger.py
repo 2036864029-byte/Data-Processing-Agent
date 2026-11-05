@@ -132,7 +132,7 @@ def test_multi_page_table_chain_merges_into_first_page() -> None:
     assert "| item | amount |" not in document.pages[2].markdown
 
 
-def test_heading_levels_are_rebuilt_without_skips() -> None:
+def test_heading_levels_are_preserved_for_structure_smoothing() -> None:
     document = merge_document(
         DOC_ID,
         [artifact(1, "### 第一章\n正文\n##### 子节\n# 附录\n")],
@@ -140,10 +140,9 @@ def test_heading_levels_are_rebuilt_without_skips() -> None:
     )
 
     markdown = document.pages[0].markdown
-    assert markdown.startswith("# 第一章")
-    assert "## 子节" in markdown
+    assert "### 第一章" in markdown
+    assert "##### 子节" in markdown
     assert "# 附录" in markdown
-    assert "###" not in markdown
 
 
 def test_document_validation_is_invoked() -> None:

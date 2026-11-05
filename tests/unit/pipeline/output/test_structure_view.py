@@ -150,6 +150,34 @@ def test_build_structure_assigns_ids_and_skips_gaps() -> None:
     assert structure.pages[1].blocks[0].block_id == "b0004"
 
 
+def test_build_structure_smooths_heading_levels() -> None:
+    source = MergedDocument(
+        doc_id="doc",
+        pages=(
+            MergedPage(page_no=1, markdown="# 一级\n\n### 三级\n\n##### 五级\n"),
+        ),
+        validation=ValidationResult(),
+    )
+    blocks = build_document_blocks(source, layouts={})
+
+    structure = build_structure(blocks, doc_id="doc")
+
+    levels = [
+        block.level
+        for block in structure.pages[0].blocks
+        if block.type == "text" and block.level is not None
+    ]
+    assert levels == [1, 2, 3]
+    rendered = to_markdown_view(
+        structure, page_order=[1], fallback={1: source.pages[0].markdown}
+    )
+    assert "# 一级" in rendered
+    assert "## 三级" in rendered
+    assert "### 五级" in rendered
+    assert "### 三级" not in rendered
+    assert "##### 五级" not in rendered
+
+
 def test_build_meta_contains_delivery_and_gaps() -> None:
     source = document()
     meta = build_meta(source, decide_delivery(source))
