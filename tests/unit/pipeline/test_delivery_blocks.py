@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -59,13 +60,17 @@ def context(
         delivery=None,
         outputs={},
         blocks=None,
+        structure=None,
+        meta=None,
     )
 
 
-def service(tmp_path: Path) -> DocumentDeliveryService:
+def service(
+    tmp_path: Path, formats: tuple[str, ...] = ("markdown",)
+) -> DocumentDeliveryService:
     return DocumentDeliveryService(
         output_dir=tmp_path,
-        config=TaskConfig(output_formats=("markdown",)),
+        config=TaskConfig(output_formats=formats),
         telemetry=TaskTelemetry(),
     )
 
@@ -82,7 +87,33 @@ def test_finalize_builds_blocks_and_markdown_uses_html_table(tmp_path: Path) -> 
     assert "<table>" in rendered
     assert "<!--table:t001-->" in rendered
     assert ctx.blocks is not None
+    assert ctx.structure is not None
     assert ctx.layouts == {}
+
+
+def test_json_output_has_meta_and_structure(tmp_path: Path) -> None:
+    markdown = "| a | b |\n| --- | --- |\n| 1 | 2 |\n"
+    ctx = context(markdown, items=table_items())
+    delivery = service(tmp_path, ("json", "markdown"))
+
+    outcome = delivery.finalize(ctx, None)
+    delivery.write_outputs([ctx])
+
+    json_path = next(path for path in outcome.outputs if path.endswith(".json"))
+    md_path = next(path for path in outcome.outputs if path.endswith(".md"))
+    payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    assert set(payload) == {"meta", "structure"}
+    assert payload["meta"]["doc_id"] == "doc"
+    table = next(
+        block
+        for page in payload["structure"]["pages"]
+        for block in page["blocks"]
+        if block["type"] == "table"
+    )
+    assert table["table_id"] == "t001"
+    assert table["rows_text"] == "a: 1；b: 2"
+    rendered = Path(md_path).read_text(encoding="utf-8")
+    assert "<!--table:t001-->" in rendered
 
 
 def test_untrusted_table_bbox_warns_on_artifact(tmp_path: Path) -> None:
@@ -109,6 +140,8 @@ def test_write_outputs_falls_back_when_blocks_missing(tmp_path: Path) -> None:
         delivery=decide_delivery(document),
         outputs={"markdown": str(tmp_path / "doc.md")},
         blocks=None,
+        structure=None,
+        meta=None,
     )
 
     service(tmp_path).write_outputs([ctx])

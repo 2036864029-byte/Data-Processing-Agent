@@ -69,8 +69,20 @@ def test_document_structure_discriminates_blocks() -> None:
     page = PageStructure(
         page_no=1,
         blocks=(
-            TextBlock(page_no=1, bbox=(0, 0, 100, 20), text="正文"),
-            TableBlock(page_no=1, bbox=(0, 20, 100, 60), grid=grid()),
+            TextBlock(
+                block_id="b0001",
+                page_no=1,
+                bbox=(0, 0, 100, 20),
+                text="正文",
+            ),
+            TableBlock(
+                block_id="b0002",
+                page_no=1,
+                bbox=(0, 20, 100, 60),
+                grid=grid(),
+                table_id="t001",
+                rows_text="项目: 合计; 金额: 100",
+            ),
         ),
     )
     document = DocumentStructure(doc_id="d1", pages=(page,))
@@ -81,11 +93,91 @@ def test_document_structure_discriminates_blocks() -> None:
     assert isinstance(restored.pages[0].blocks[1], TableBlock)
 
 
+def test_heading_level_and_ids_validated() -> None:
+    with pytest.raises(ValidationError):
+        TextBlock(
+            block_id="x1", page_no=1, bbox=(0, 0, 1, 1), text="标题", level=1
+        )
+    with pytest.raises(ValidationError):
+        TextBlock(
+            block_id="b0001", page_no=1, bbox=(0, 0, 1, 1), text="标题", level=7
+        )
+    with pytest.raises(ValidationError):
+        TableBlock(
+            block_id="b0002",
+            page_no=1,
+            bbox=(0, 0, 1, 1),
+            grid=grid(),
+            table_id="001",
+            rows_text="项目: 合计",
+        )
+
+
+def test_table_block_requires_rows_text() -> None:
+    with pytest.raises(ValidationError):
+        TableBlock(
+            block_id="b0002",
+            page_no=1,
+            bbox=(0, 0, 1, 1),
+            grid=grid(),
+            table_id="t001",
+        )
+
+
+def test_block_and_table_ids_must_be_unique() -> None:
+    first = PageStructure(
+        page_no=1,
+        blocks=(
+            TextBlock(block_id="b0001", page_no=1, bbox=(0, 0, 1, 1), text="a"),
+        ),
+    )
+    duplicate_block = PageStructure(
+        page_no=2,
+        blocks=(
+            TextBlock(block_id="b0001", page_no=2, bbox=(0, 0, 1, 1), text="b"),
+        ),
+    )
+    with pytest.raises(ValidationError):
+        DocumentStructure(doc_id="d", pages=(first, duplicate_block))
+
+    table = TableBlock(
+        block_id="b0002",
+        page_no=1,
+        bbox=(0, 0, 1, 1),
+        grid=grid(),
+        table_id="t001",
+        rows_text="项目: 合计",
+    )
+    duplicate_table = TableBlock(
+        block_id="b0003",
+        page_no=2,
+        bbox=(0, 0, 1, 1),
+        grid=grid(),
+        table_id="t001",
+        rows_text="项目: 合计",
+    )
+    with pytest.raises(ValidationError):
+        DocumentStructure(
+            doc_id="d",
+            pages=(
+                PageStructure(page_no=1, blocks=(table,)),
+                PageStructure(page_no=2, blocks=(duplicate_table,)),
+            ),
+        )
+
+
 def test_page_block_must_match_page_number() -> None:
     with pytest.raises(ValidationError):
         PageStructure(
             page_no=1,
-            blocks=(TextBlock(page_no=2, bbox=(0, 0, 1, 1), text="x"),),
+            blocks=(
+                TextBlock(
+                    block_id="b0001",
+                    page_no=2,
+                    bbox=(0, 0, 1, 1),
+                    text="x",
+                ),
+            ),
         )
 
 

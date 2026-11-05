@@ -178,6 +178,10 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 
 **验收**：对账测试通过；黄金集 60 页标题层级与现行 `_normalize_headings` 输出一致；同一结构树渲染两视图，表格 ID、标题路径、行数全部一致。
 
+> **PR-2 落地注记（2026-11-05）**：契约字段、结构视图（`pipeline/output/structure_view.py`）、
+> `{meta, structure}` JSON、`rows_text` 与 md/json 对账已落地。`_normalize_headings`
+> 迁入结构树与流式交付暂缓至 PR-2b。
+
 ## 5. 阶段三：规模化细节与消费侧产物
 
 1. **跨页表合并改造**：`_merge_cross_page_tables` 从管道表文本行改为基于 TableGrid（行追加 + 表头沿用），触发条件沿用（上页触底 + 本页页首 + 列数一致 + 表头相似 ≥0.8）；`contracts/table.py::TableGrid` 增 `page_span: tuple[int, int]`（单页表为 `(page_no, page_no)`），合并块 bbox 取起始页表 bbox；黄金集跨页样本先跑对照。

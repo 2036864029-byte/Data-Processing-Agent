@@ -7,9 +7,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from dataagent.contracts.artifacts import PageArtifact
 from dataagent.contracts.messages import PageReport
+from dataagent.contracts.structure import DocumentStructure
 from dataagent.pipeline.ingest.ingestor import DocumentRecord
 from dataagent.pipeline.merge.merger import MergedDocument
 from dataagent.pipeline.output.delivery import DeliveryDecision
@@ -38,5 +40,7 @@ class DocumentContext:
     # 交付阶段
     merged: MergedDocument | None = None
     blocks: DocumentBlocks | None = None
+    structure: DocumentStructure | None = None
+    meta: dict[str, Any] | None = None
     delivery: DeliveryDecision | None = None
     outputs: dict[str, str] = field(default_factory=dict)

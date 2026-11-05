@@ -36,6 +36,18 @@
 - 表头 rowspan 跨入数据行时在表头边界截断，避免合并后单元格重叠。
 - `scripts/validate_tables.py` 增加“逻辑行合并”第五栏对照。
 
+### 结构树 JSON 与双视图（PR-2，2026-11-05）
+
+- `contracts/structure.py`：`TextBlock` 增加 `block_id` / `level`；`TableBlock` 增加
+  `block_id` / `table_id` / `caption` / `rows_text`；文档内 block_id 与 table_id 唯一性校验。
+- 新增 `pipeline/output/structure_view.py`：内部块 → `DocumentStructure`；`rows_text`
+  按行序列化（单元格内换行折叠为空格）；输出 `{meta, structure}` JSON 与结构 md 视图。
+- 交付切换：JSON 写结构树（`meta` 含交付等级/缺口页/校验），md 由结构渲染；
+  md 中每个 `tNNN` 与 JSON 表格块一一对账。
+- 真实年报：122 个非缺口页、235 张表、21 个缺口页；md/json 表 ID 完全一致；
+  p25 人员表 `rows_text` 13 行（每行一人）。
+- 暂缓：`_normalize_headings` 迁入结构树、流式交付（PR-2b）。
+
 ## [0.1.0] - 2026-11-01
 
 ### 新增

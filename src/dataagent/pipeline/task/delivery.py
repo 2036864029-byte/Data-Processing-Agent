@@ -14,6 +14,12 @@ from dataagent.pipeline.output.delivery import (
 )
 from dataagent.pipeline.output.formats import to_csv, to_excel, to_json, to_markdown
 from dataagent.pipeline.output.reports import DocSummary, PageDetail
+from dataagent.pipeline.output.structure_view import (
+    build_meta,
+    build_structure,
+    to_json_view,
+    to_markdown_view,
+)
 from dataagent.pipeline.repair.fallback import FallbackPath, resolve_fallback
 from dataagent.pipeline.repair.gap import PageGap
 from dataagent.pipeline.sniff.sniffer import Family
@@ -121,6 +127,12 @@ class DocumentDeliveryService:
         context.layouts.clear()
         decision = decide_delivery(document, gap_tolerance=self._config.gap_tolerance)
         context.merged = document
+        if context.blocks is not None:
+            context.structure = build_structure(context.blocks, doc_id=doc_id)
+            context.meta = build_meta(document, decision)
+        else:
+            context.structure = None
+            context.meta = None
         context.delivery = decision
         context.outputs = {
             fmt: str(self._output_dir / f"{doc_id}.{_SUFFIX[fmt]}")
@@ -209,7 +221,12 @@ class DocumentDeliveryService:
             decision = context.delivery
             for fmt, target in context.outputs.items():
                 if fmt == "json":
-                    payload = to_json(merged, decision).encode("utf-8")
+                    if context.structure is not None and context.meta is not None:
+                        payload = to_json_view(
+                            context.structure, context.meta
+                        ).encode("utf-8")
+                    else:
+                        payload = to_json(merged, decision).encode("utf-8")
                 elif fmt == "markdown":
                     payload = self._markdown_payload(context, merged, decision)
                 elif fmt == "csv":
@@ -224,8 +241,14 @@ class DocumentDeliveryService:
         merged: MergedDocument,
         decision: DeliveryDecision,
     ) -> bytes:
+        fallback = {page.page_no: page.markdown for page in merged.pages}
+        if context.structure is not None:
+            return to_markdown_view(
+                context.structure,
+                page_order=[page.page_no for page in merged.pages],
+                fallback=fallback,
+            ).encode("utf-8")
         if context.blocks is not None:
-            fallback = {page.page_no: page.markdown for page in merged.pages}
             return render_document_markdown(
                 context.blocks, fallback=fallback
             ).encode("utf-8")
