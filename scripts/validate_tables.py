@@ -16,6 +16,7 @@ import html
 import json
 import sys
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ from dataagent.pipeline.table.geometry import (
 from dataagent.pipeline.table.markdown import markdown_tables
 from dataagent.pipeline.table.render import to_markdown
 from dataagent.pipeline.table.router import route_tables
+from dataagent.pipeline.table.rowmerge import merge_logical_rows
 from dataagent.platform.plugins.adapters.table_pdfplumber import PdfplumberTableSource
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,9 +79,7 @@ def main(argv: list[str] | None = None) -> int:
 def evaluate_constructed() -> dict[str, Any]:
     manifest = read_json(GOLDEN_ROOT / "manifest.json")
     samples = [
-        row
-        for row in manifest
-        if row.get("source") == "constructed" and row.get("has_table")
+        row for row in manifest if row.get("source") == "constructed" and row.get("has_table")
     ]
     results: list[dict[str, Any]] = []
     for row in samples:
@@ -155,9 +155,9 @@ def render_real_pages(pdf_path: Path, pages: list[int]) -> list[str]:
         with PdfplumberTableSource(str(pdf_path)) as source:
             for page_no in pages:
                 markdown = (
-                    pdf_inspector.extract_pages_markdown(
-                        str(pdf_path), pages=[page_no - 1]
-                    ).pages[0].markdown
+                    pdf_inspector.extract_pages_markdown(str(pdf_path), pages=[page_no - 1])
+                    .pages[0]
+                    .markdown
                     or ""
                 )
                 items = items_for_page(raw_items, page_no)
@@ -165,9 +165,7 @@ def render_real_pages(pdf_path: Path, pages: list[int]) -> list[str]:
                 l0 = markdown_tables(markdown, page_no=page_no, bbox=page_bbox)
                 l1 = _geometry_grids(raw_items, page_no)
                 ruled = source.extract_page(page_no)
-                routing = route_tables(
-                    markdown, items, page_no=page_no, ruled_tables=ruled
-                )
+                routing = route_tables(markdown, items, page_no=page_no, ruled_tables=ruled)
                 image_path = OUTPUT / f"page_{page_no}.png"
                 _render_page(document, page_no - 1, image_path)
                 sections.append(
@@ -191,19 +189,20 @@ def _page_section(
     *,
     page_no: int,
     image: str,
-    l0: list[TableGrid],
-    l1: list[TableGrid],
-    ruled: list[TableGrid],
+    l0: Sequence[TableGrid],
+    l1: Sequence[TableGrid],
+    ruled: Sequence[TableGrid],
     routing: Any,
     items: Any,
     page_bbox: tuple[float, float, float, float],
 ) -> str:
     decisions = _gate_decisions(ruled, l0, items, page_bbox)
+    merged = [merge_logical_rows(grid) for grid in ruled]
     selected = "".join(
         f"<p><b>{html.escape(choice.source)}</b> · "
         f"{choice.grid.n_rows}×{choice.grid.n_cols} · "
         f"{html.escape(choice.reason)}</p>"
-        f"<pre>{html.escape(to_markdown(choice.grid))}</pre>"
+        f"{_pre(choice.grid)}"
         for choice in routing.tables
     )
     return f"""
@@ -214,45 +213,65 @@ def _page_section(
     <div class="pane"><h3>原图</h3><img src="{image}" alt="page {page_no}"></div>
     <div class="pane"><h3>L0 · pdf-inspector Markdown</h3>{_render_grids(l0)}</div>
     <div class="pane"><h3>L1 · 坐标聚类</h3>{_render_grids(l1)}</div>
-    <div class="pane"><h3>pdfplumber · 有框线</h3>{_render_grids(ruled)}{decisions}</div>
+    <div class="pane"><h3>pdfplumber · 物理行</h3>{_render_grids(ruled)}{decisions}</div>
+    <div class="pane"><h3>逻辑行合并 · 建议接入</h3>{_render_merged(ruled, merged)}</div>
   </div>
   <h3>路由选中</h3>
   {selected or "<p>未识别出表格</p>"}
 </section>"""
 
 
-def _render_grids(grids: list[TableGrid]) -> str:
+def _pre(grid: TableGrid) -> str:
+    """Markdown 里的 <br> 还原成真实换行，避免在页面上显示成 &lt;br&gt;。"""
+    escaped = html.escape(to_markdown(grid))
+    return f"<pre>{escaped.replace('&lt;br&gt;', '<br>')}</pre>"
+
+
+def _render_grids(grids: Sequence[TableGrid]) -> str:
     if not grids:
         return "<p class='muted'>无</p>"
+    return "".join(_pre(grid) for grid in grids)
+
+
+def _render_merged(ruled: list[TableGrid], merged: list[TableGrid]) -> str:
+    if not ruled:
+        return "<p class='muted'>无</p>"
     return "".join(
-        f"<pre>{html.escape(to_markdown(grid))}</pre>" for grid in grids
+        f"<p class='muted'>{before.n_rows} → {after.n_rows} 行 · "
+        f"删除 {before.n_rows - after.n_rows} 个续行</p>{_pre(after)}"
+        for before, after in zip(ruled, merged, strict=True)
     )
 
 
 def _gate_decisions(
-    ruled: list[TableGrid],
-    l0: list[TableGrid],
+    ruled: Sequence[TableGrid],
+    l0: Sequence[TableGrid],
     items: Any,
     page_bbox: tuple[float, float, float, float],
 ) -> str:
     projected = [project_grid(grid, items) for grid in l0]
     l0_grids = [
-        item.grid if item is not None else grid
-        for grid, item in zip(l0, projected, strict=True)
+        item.grid if item is not None else grid for grid, item in zip(l0, projected, strict=True)
     ]
     lines: list[str] = []
     for index, grid in enumerate(ruled):
         reference = _best_reference(grid, l0_grids, projected)
-        decision = evaluate_candidate(
-            grid, reference, page_bbox=page_bbox if items else None
-        )
+        decision = evaluate_candidate(grid, reference, page_bbox=page_bbox if items else None)
         lines.append(
             f"<p class='muted'>候选 {index + 1}：{html.escape(decision.reason)} · "
             f"fill {decision.stats.filled_ratio:.2f} · "
             f"coverage {decision.stats.text_coverage} · "
-            f"row_ratio {decision.stats.row_ratio}</p>"
+            f"row_ratio {decision.stats.row_ratio}{_inflation_mark(decision)}</p>"
         )
     return "".join(lines)
+
+
+def _inflation_mark(decision: Any) -> str:
+    """row_ratio 只有下限没有上限，超过 1.3 即视为行膨胀（记录被拆开）。"""
+    ratio = decision.stats.row_ratio
+    if ratio is not None and ratio > 1.3:
+        return f" <b>← 行膨胀 {ratio:.2f}×，网关不拦</b>"
+    return ""
 
 
 def _best_reference(
@@ -275,9 +294,7 @@ def _best_reference(
 
 def _geometry_grids(raw_items: Any, page_no: int) -> list[TableGrid]:
     grids: list[TableGrid] = []
-    for region in detect_table_regions(
-        items_for_page(raw_items, page_no), page_no=page_no
-    ):
+    for region in detect_table_regions(items_for_page(raw_items, page_no), page_no=page_no):
         try:
             grids.append(
                 build_table_grid(
@@ -299,11 +316,7 @@ def _truth_matrix(truth: dict[str, Any]) -> list[list[str]]:
     if not tables:
         return []
     header = [str(cell) for cell in tables[0].get("header", [])]
-    rows = [
-        [str(cell) for cell in row]
-        for table in tables
-        for row in table.get("rows", [])
-    ]
+    rows = [[str(cell) for cell in row] for table in tables for row in table.get("rows", [])]
     return [header, *rows] if header else rows
 
 
@@ -370,15 +383,15 @@ def _html(sections: list[str]) -> str:
         "<style>body{font-family:system-ui,sans-serif;margin:20px;background:#f6f7f9}"
         "section{background:#fff;border:1px solid #ddd;border-radius:6px;"
         "margin:18px 0;padding:14px}"
-        ".grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}"
+        ".grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}"
         ".pane{min-width:0}h3{font-size:14px;margin:6px 0}"
         "img{max-width:100%;border:1px solid #ccc}"
         "pre{white-space:pre-wrap;font-size:11px;background:#fafafa;"
         "border:1px solid #eee;padding:8px;overflow:auto;max-height:420px}"
         ".muted{color:#666;font-size:12px}"
-        "@media(max-width:1100px){.grid{grid-template-columns:1fr}}"
+        "@media(max-width:1400px){.grid{grid-template-columns:1fr}}"
         "</style>"
-        "<h1>表格抽取对照（原图 / L0 / L1 / pdfplumber）</h1>"
+        "<h1>表格抽取对照（原图 / L0 / L1 / pdfplumber 物理行 / 逻辑行合并）</h1>"
         + "".join(sections)
         + "</html>"
     )

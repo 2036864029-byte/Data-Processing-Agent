@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataagent.pipeline.structure.build as build_module
 from dataagent.contracts.artifacts import PageArtifact
+from dataagent.contracts.table import TableCell, TableGrid
 from dataagent.pipeline.merge.merger import (
     MergedDocument,
     MergedPage,
@@ -12,6 +14,8 @@ from dataagent.pipeline.merge.merger import (
 from dataagent.pipeline.structure.build import build_document_blocks, build_page_blocks
 from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.table.geometry import PositionedText
+from dataagent.pipeline.table.quality import grid_quality
+from dataagent.pipeline.table.router import TableChoice, TableRouting
 
 
 def item(
@@ -392,3 +396,47 @@ def test_item_path_drops_running_header_line() -> None:
     ]
     assert all(header not in text for text in texts)
     assert any("正文1" in text for text in texts)
+
+
+def test_selected_grid_is_logically_merged(monkeypatch) -> None:
+    grid = TableGrid(
+        page_no=1,
+        bbox=(0.0, 0.0, 1.0, 1.0),
+        n_rows=3,
+        n_cols=3,
+        header_rows=1,
+        cells=(
+            TableCell(row=0, col=0, text="姓名"),
+            TableCell(row=0, col=1, text="职务"),
+            TableCell(row=0, col=2, text="任期起始"),
+            TableCell(row=1, col=0, text="张德芹", rowspan=2),
+            TableCell(row=1, col=1, text="党委书记"),
+            TableCell(row=1, col=2, text="2024-04-30"),
+            TableCell(row=2, col=1, text="董事长、董事"),
+            TableCell(row=2, col=2, text="2024-05-29"),
+        ),
+        source_engine="test",
+        confidence=1.0,
+    )
+    routing = TableRouting(
+        tables=(
+            TableChoice(
+                grid=grid,
+                source="ruled",
+                reason="accepted",
+                quality=grid_quality(grid),
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        build_module, "route_tables", lambda *args, **kwargs: routing
+    )
+
+    result = build_page_blocks(
+        page_no=1, markdown="正文\n", layout=PageLayout(page_no=1)
+    )
+
+    tables = [block for block in result.page.blocks if block.kind == "table"]
+    assert len(tables) == 1
+    assert tables[0].table is not None
+    assert tables[0].table.grid.n_rows == 2

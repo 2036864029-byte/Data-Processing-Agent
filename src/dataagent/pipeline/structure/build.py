@@ -33,6 +33,7 @@ from dataagent.pipeline.structure.models import (
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.table.markdown import markdown_table_spans, markdown_tables
 from dataagent.pipeline.table.router import TableRouting, route_tables
+from dataagent.pipeline.table.rowmerge import merge_logical_rows
 
 LINE_TOLERANCE_RATIO: Final[float] = 0.6
 PARAGRAPH_SHORT_RATIO: Final[float] = 0.85
@@ -207,6 +208,9 @@ def _build_slots(
             )
         )
     demoted: list[tuple[int, int]] = []
+    slots = [
+        replace(slot, grid=merge_logical_rows(slot.grid)) for slot in slots
+    ]
     if not has_items:
         kept: list[TableSlot] = []
         for slot in slots:

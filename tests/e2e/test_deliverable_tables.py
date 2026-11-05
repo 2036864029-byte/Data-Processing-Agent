@@ -21,6 +21,7 @@ from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.structure.render import render_document_markdown
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.table.router import route_tables
+from dataagent.pipeline.table.rowmerge import merge_logical_rows
 from dataagent.platform.plugins.adapters.layout_probe import probe_layout
 from dataagent.platform.plugins.adapters.table_pdfplumber import PdfplumberTableSource
 
@@ -81,7 +82,10 @@ def test_selected_tables_match_router(page: int) -> None:
         ruled_tables=ruled,
     )
 
-    expected = sorted(signature(choice.grid) for choice in routing.tables)
+    expected = sorted(
+        signature(merge_logical_rows(choice.grid))
+        for choice in routing.tables
+    )
     actual = sorted(
         signature(block.table.grid)
         for block in result.page.blocks
@@ -105,6 +109,42 @@ def test_selected_tables_match_router(page: int) -> None:
             box[0] <= center_x <= box[2] and box[1] <= center_y <= box[3]
             for box in trusted
         )
+
+
+def test_p25_personnel_table_is_logically_merged() -> None:
+    markdown, layout, ruled = page_inputs(25)
+
+    result = build_page_blocks(
+        page_no=25, markdown=markdown, layout=layout, ruled_tables=ruled
+    )
+
+    tables = [
+        block.table.grid
+        for block in result.page.blocks
+        if block.kind == "table" and block.table is not None
+    ]
+    assert len(tables) == 1
+    grid = tables[0]
+    assert (grid.n_rows, grid.n_cols) == (14, 12)
+    names = [cell.text for cell in grid.cells if cell.col == 0 and cell.row > 0]
+    assert names == [
+        "张德芹",
+        "王 莉",
+        "郭田勇",
+        "盛雷鸣",
+        "王 鑫",
+        "刘世仲",
+        "韦 芳",
+        "游亚林",
+        "郑尚勋",
+        "闻 勇",
+        "钟正强",
+        "蒋 焰",
+        "向 平",
+    ]
+    merged = {(cell.row, cell.col): cell.text for cell in grid.cells}
+    assert merged[(1, 1)] == "党委书记\n董事长、董事"
+    assert merged[(1, 4)] == "2024年04月30日\n2024年05月29日"
 
 
 def test_document_renders_each_table_id_once() -> None:
