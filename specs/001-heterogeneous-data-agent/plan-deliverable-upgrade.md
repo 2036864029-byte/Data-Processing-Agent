@@ -238,6 +238,12 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 - **凭证预置为前提**：首次接入是配置动作（登记存储地址 + 凭证），之后自然语言才可路由；
   NL 不能越过网络可达性（服务器到不了的地址只能回退）。
 
+**PR-4-3 已落地**：`Settings.deliver_targets`（name → path / aliases）登记目标；
+`pipeline/output/targets.py` 做 P0 规则路由（名称/别名子串、最长匹配优先，歧义/
+未命中/不可达回退默认）；`create_builtin_runner(deliver_to=...)` 在输出根注入点
+解析并写结构化日志。NAS 挂载与 Docker bind mount 写入 `docs/delivery-targets.md`；
+直接 WebDAV/SMB 后端插件仍为按需项。
+
 ### 6.6 规模验证
 
 大批量压测对齐 PRD（16 核 / 1000 页/秒，即 16ms/页/核；实测茅台年报 markdown

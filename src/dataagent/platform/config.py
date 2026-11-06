@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
@@ -18,6 +19,15 @@ from pydantic_settings import (
 
 CONFIG_YAML_DEFAULT = "config.yaml"
 CONFIG_ENV_NAME = "DATAAGENT_CONFIG"
+
+
+class DeliverTargetSettings(BaseModel):
+    """一个已配置的交付目标（NAS 等经 OS 挂载后的输出根）。"""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: Path
+    aliases: tuple[str, ...] = ()
 
 
 class YamlConfigSource(PydanticBaseSettingsSource):
@@ -87,6 +97,8 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8080
     output_dir: Path = Path("var/output")
+    # 交付目标：name -> 路径与自然语言别名（NAS 先经 OS 挂载，凭证归挂载层）
+    deliver_targets: dict[str, DeliverTargetSettings] = Field(default_factory=dict)
 
     @classmethod
     def settings_customise_sources(

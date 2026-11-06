@@ -36,3 +36,11 @@ plan_max_wall_time_s: 3600
 api_host: 127.0.0.1
 api_port: 8080
 output_dir: var/output            # 交付产物根目录（/download 与 /manifest 只读此目录）
+
+# 交付目标（PR-4-3）：NAS 等先经 OS 挂载，再登记 name -> 路径 + 自然语言别名。
+# 路由是 P0 规则：名称/别名（忽略大小写与空白）子串匹配、最长匹配优先；
+# 未命中/歧义/路径不可达都回退 output_dir 并记录原因。凭证由挂载层负责。
+# deliver_targets:
+#   nas_finance:
+#     path: /mnt/nas/finance
+#     aliases: ["公司 NAS 财报库", "财报库"]

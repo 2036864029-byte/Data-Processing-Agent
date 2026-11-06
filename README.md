@@ -58,6 +58,10 @@ CLI 是唯一入口，Web 由 CLI 拉起；API 无状态、worker 无状态（�
 
 输出根由 `output_dir`（默认 `var/output`，可用 `DATAAGENT_OUTPUT_DIR` 覆盖）指定。
 
+NAS / 共享盘优先走 OS 挂载，再在 `deliver_targets` 中登记名称与别名；
+任务可用自然语言指定交付位置，未命中或不可达时回退 `output_dir` 并记录原因。
+挂载步骤与路由规则见 [`docs/delivery-targets.md`](docs/delivery-targets.md)。
+
 ## P0-B 已落地能力
 
 - 接入与体检：folder/upload、内容哈希去重、11 项三态体检、待确认队列

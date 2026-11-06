@@ -10,6 +10,19 @@
 
 ## [未发布]
 
+### 交付目标扩展（PR-4-3，2026-11-06）
+
+- 新增 `pipeline/output/targets.py`：交付目标注册表 + P0 确定性 NL 路由。
+  名称/别名忽略大小写与空白子串匹配、最长匹配优先；未指定、`no_match`、
+  `ambiguous`、`unreachable` 一律回退默认输出根并给出原因。
+- `create_builtin_runner(..., deliver_to=..., deliver_targets=...)`：任务创建注入点
+  解析交付位置；命中写 `delivery_target_routed`（INFO），回退写
+  `delivery_target_fallback`（WARNING，含 `requested/target/reason/detail`）。
+- 配置新增 `deliver_targets`（name → path / aliases）；NAS 优先 OS 挂载 +
+  路径指挂载点，凭证归挂载层。新增 `docs/delivery-targets.md`（NFS/CIFS 挂载、
+  Docker bind mount、路由规则、已知限制）。
+- 直接 WebDAV/SMB 后端插件未实现，按需再做。
+
 ### 交付访问层（PR-4-2，2026-11-05）
 
 - 新增 `GET /download/<relative_key>`：按 manifest 的相对 key 下发单文件。

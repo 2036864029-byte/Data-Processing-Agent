@@ -68,6 +68,8 @@ services:
     mem_limit: 512m
     volumes:
       - outputs:/app/var/output
+      # NAS：宿主机先挂载，再把挂载点 bind mount 进容器
+      # - /mnt/nas/finance:/data/finance
     depends_on:
       postgres:
         condition: service_healthy
