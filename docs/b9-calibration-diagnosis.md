@@ -57,6 +57,17 @@
 仍缺：5 个表格/跨页表正例的分数高于阈值（表头/合并单元格/跨页续接等结构问题
 没有被现有指标捕获），需要更细的表格结构特征与更多带 `error_notes` 的正例标注。
 
+### A2 增量标注已准备（2026-11-06）
+
+- `tests/eval/annotations_template_v2.py` 从剩余 140 页按结构风险优先选 60 页
+  （每类 6 个高风险 + 4 个确定性抽样），正例密度更高；
+- `var/golden/human_sheet_v2.csv` 与 `var/golden/review_v2/index.html` 已生成，
+  `parsed_v2/` 与第一批的 `parsed/` 隔离，不会覆盖已标注基准；
+- 查看器强制：勾选“需要人工介入”必须填写问题备注；表格页要求填 `dim_table`；
+- 标注完成后合并：`import_annotations.py --filled var/golden/annotations_filled_v2.csv`，
+  再运行 `calibrate.py` / `qc_gate_report.py` 复核门禁。
+
+
 
 ## 根因
 

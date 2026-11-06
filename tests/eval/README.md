@@ -11,13 +11,22 @@
 # 标注准备：生成 200 页模板 + 60 页人工子集（六类各 10 页：40 拟合 / 20 留出）
 .venv/Scripts/python.exe tests/eval/annotations_template.py
 
-# B. 采集每页代理指标（待端到端管线接通后替换为系统 L1 指标）
+# B. 采集每页代理指标（历史口径；标定脚本现已直接按生产 L1 分量计算）
 .venv/Scripts/python.exe tests/eval/collect_metrics.py
 
 # 生成 60 页对照查看器（左页图 + 右产物 + 打分控件）
 .venv/Scripts/python.exe tests/eval/prepare_review.py
 # 用浏览器打开 var/golden/review/index.html 逐页打分，完成后导出 annotations_filled.csv
 .venv/Scripts/python.exe tests/eval/import_annotations.py
+
+# 增量批次（A 路径）：从剩余 140 页按结构风险优先选 60 页，生成 review_v2
+.venv/Scripts/python.exe tests/eval/annotations_template_v2.py
+.venv/Scripts/python.exe tests/eval/prepare_review.py \
+  --sheet var/golden/human_sheet_v2.csv --out var/golden/review_v2 \
+  --parsed var/golden/parsed_v2 --export-name annotations_filled_v2.csv
+# 用浏览器打开 var/golden/review_v2/index.html 打分后合并
+.venv/Scripts/python.exe tests/eval/import_annotations.py \
+  --filled var/golden/annotations_filled_v2.csv
 
 # D. 无人工标注时输出 insufficient_labels；完成打分后运行
 .venv/Scripts/python.exe tests/eval/calibrate.py
@@ -39,6 +48,9 @@
 - `needs_manual`：这页是否需要人工介入（是/否），用于 `extract_quality` 标定；
   判定标准是“产物能否直接用于自动化下游”，而不是结构分是否 ≤1——简单表格
   若行列与字段可读、还原度足够，可以不勾；
+- **勾选 `needs_manual` 必须填写 `error_notes`**（查看器导出时强制），
+  写明具体失败点（表头/合并单元格/跨页续接/阅读顺序/乱码等），供特征工程使用；
+- 表格页应填 `dim_table`，并同样在 `error_notes` 写明表格问题；
 - `label_source`：人工填 `human`；自动扩展标签填 `auto`，并在报告中只用人面子集验收；
 - 参照物是原始 PDF 页面与系统产物并排对照，不是另一次解析结果。
 - 查看器内置「评分标准」折叠面板与每张卡片的判据提示（结构=层级/段落/列表/表格行列/顺序；版式=块位置/分栏/bbox）。

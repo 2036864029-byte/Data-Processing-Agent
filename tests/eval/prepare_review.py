@@ -30,15 +30,24 @@ PARSED_ROOT = GOLDEN_ROOT / "parsed"
 RENDER_SCALE = 1.6
 
 
-def prepare() -> dict[str, Any]:
-    rows = read_csv(GOLDEN_ROOT / "human_sheet.csv")
+def prepare(
+    *,
+    sheet_path: Path | None = None,
+    review_root: Path | None = None,
+    parsed_root: Path | None = None,
+    export_name: str = "annotations_filled.csv",
+) -> dict[str, Any]:
+    sheet_path = sheet_path or GOLDEN_ROOT / "human_sheet.csv"
+    review_root = review_root or REVIEW_ROOT
+    parsed_root = parsed_root or PARSED_ROOT
+    rows = read_csv(sheet_path)
     manifest = {
         row["sample_id"]: row for row in read_json(GOLDEN_ROOT / "manifest.json")
     }
-    images = REVIEW_ROOT / "images"
+    images = review_root / "images"
     images.mkdir(parents=True, exist_ok=True)
-    PARSED_ROOT.mkdir(parents=True, exist_ok=True)
-    for stale in PARSED_ROOT.glob("*.md"):
+    parsed_root.mkdir(parents=True, exist_ok=True)
+    for stale in parsed_root.glob("*.md"):
         stale.unlink()
     for stale in images.glob("*.png"):
         stale.unlink()
@@ -54,7 +63,7 @@ def prepare() -> dict[str, Any]:
         meta = manifest.get(sample_id, {})
         status, display, banner = _diagnose(file_path, page_index, markdown, meta)
         display = repair_numbering(normalize_cjk_text(display))
-        parsed_path = PARSED_ROOT / f"{sample_id}.md"
+        parsed_path = parsed_root / f"{sample_id}.md"
         parsed_path.write_text(display, encoding="utf-8")
         image_path = images / f"{sample_id}.png"
         _render_page(file_path, page_index, image_path)
@@ -76,9 +85,11 @@ def prepare() -> dict[str, Any]:
             }
         )
 
-    write_json(REVIEW_ROOT / "index.json", entries)
-    (REVIEW_ROOT / "index.html").write_text(_render_html(entries), encoding="utf-8")
-    return {"samples": len(entries), "viewer": str(REVIEW_ROOT / "index.html")}
+    write_json(review_root / "index.json", entries)
+    (review_root / "index.html").write_text(
+        _render_html(entries, export_name=export_name), encoding="utf-8"
+    )
+    return {"samples": len(entries), "viewer": str(review_root / "index.html")}
 
 
 def _extract_page_markdown(path: Path, page_index: int) -> str:
@@ -139,10 +150,14 @@ def _render_page(path: Path, page_index: int, output: Path) -> None:
         document.close()
 
 
-def _render_html(entries: list[dict[str, Any]]) -> str:
+def _render_html(
+    entries: list[dict[str, Any]], *, export_name: str = "annotations_filled.csv"
+) -> str:
     cards = "\n".join(_card(entry) for entry in entries)
-    return _TEMPLATE.replace("__CARDS__", cards).replace(
-        "__COUNT__", str(len(entries))
+    return (
+        _TEMPLATE.replace("__CARDS__", cards)
+        .replace("__COUNT__", str(len(entries)))
+        .replace("__EXPORT_NAME__", export_name)
     )
 
 
@@ -319,6 +334,13 @@ function csvEscape(value) {
   return /[",\\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 document.getElementById("export").addEventListener("click", () => {
+  for (const card of cards) {
+    const e = state[card.dataset.sample] || {};
+    if (e.needs_manual && !String(e.error_notes || "").trim()) {
+      alert("样本 " + card.dataset.sample + " 勾选了“需要人工介入”，请填写问题备注");
+      return;
+    }
+  }
   const header = ["sample_id","dim_text","dim_structure","dim_semantic","dim_layout",
                   "dim_table","needs_manual","error_notes","annotator","date","label_source"];
   const lines = [header.join(",")];
@@ -334,7 +356,7 @@ document.getElementById("export").addEventListener("click", () => {
   const blob = new Blob(["\\ufeff" + lines.join("\\n")], {type: "text/csv;charset=utf-8"});
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "annotations_filled.csv";
+  link.download = "__EXPORT_NAME__";
   link.click();
   URL.revokeObjectURL(link.href);
 });
@@ -345,4 +367,22 @@ restore();
 
 
 if __name__ == "__main__":
-    print(json.dumps(prepare(), ensure_ascii=False))
+    import argparse
+
+    parser = argparse.ArgumentParser(description="生成人工打分对照查看器")
+    parser.add_argument("--sheet", type=Path, default=GOLDEN_ROOT / "human_sheet.csv")
+    parser.add_argument("--out", type=Path, default=REVIEW_ROOT)
+    parser.add_argument("--parsed", type=Path, default=PARSED_ROOT)
+    parser.add_argument("--export-name", default="annotations_filled.csv")
+    args = parser.parse_args()
+    print(
+        json.dumps(
+            prepare(
+                sheet_path=args.sheet,
+                review_root=args.out,
+                parsed_root=args.parsed,
+                export_name=args.export_name,
+            ),
+            ensure_ascii=False,
+        )
+    )

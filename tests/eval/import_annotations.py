@@ -67,8 +67,23 @@ def _normalize_bool(value: str) -> str:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="合并查看器导出的打分到 annotations.csv")
+    parser.add_argument(
+        "--filled", type=Path, default=GOLDEN_ROOT / "annotations_filled.csv"
+    )
+    parser.add_argument(
+        "--annotations", type=Path, default=GOLDEN_ROOT / "annotations.csv"
+    )
+    args = parser.parse_args()
     try:
-        print(json.dumps(merge(), ensure_ascii=False))
+        print(
+            json.dumps(
+                merge(filled_path=args.filled, annotations_path=args.annotations),
+                ensure_ascii=False,
+            )
+        )
     except FileNotFoundError as exc:
         print(f"缺少输入文件：{exc}", file=sys.stderr)
         sys.exit(1)
