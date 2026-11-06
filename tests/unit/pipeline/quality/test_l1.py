@@ -217,3 +217,51 @@ def test_severity_stays_in_range(overrides: dict[str, float]) -> None:
 
     assert all(0.0 <= defect.severity <= 1.0 for defect in report.defects)
     assert 0.0 <= report.extract_quality <= 1.0
+
+
+def test_from_text_populates_text_quality_features() -> None:
+    metrics = L1Metrics.from_text(
+        "第一段完整。\n第二段完整。\n", text_area=468.0
+    )
+
+    assert metrics.clean_spacing == 1.0
+    assert metrics.prose_ratio == 1.0
+    assert metrics.numbering_ratio == 0.0
+
+
+def test_text_quality_features_affect_score() -> None:
+    healthy = L1_CHECKER.check(page_input()).extract_quality
+    degraded = L1_CHECKER.check(
+        page_input(
+            metrics=healthy_metrics(
+                clean_spacing=0.0, prose_ratio=0.2, numbering_ratio=0.0
+            )
+        )
+    ).extract_quality
+
+    assert healthy > degraded
+
+
+def test_table_fill_affects_table_page_score() -> None:
+    good = L1_CHECKER.check(
+        page_input(
+            has_table=True,
+            metrics=healthy_metrics(table_cell_fill=1.0),
+        )
+    ).extract_quality
+    broken = L1_CHECKER.check(
+        page_input(
+            has_table=True,
+            metrics=healthy_metrics(table_cell_fill=0.5),
+        )
+    ).extract_quality
+
+    assert good > broken
+
+
+def test_non_table_page_is_not_penalized_for_missing_table_metrics() -> None:
+    report = L1_CHECKER.check(
+        page_input(metrics=healthy_metrics(table_cell_fill=None))
+    )
+
+    assert report.extract_quality > 0.9

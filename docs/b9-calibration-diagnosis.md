@@ -38,6 +38,26 @@
 
 复现：`uv run python tests/eval/qc_gate_report.py`（输出 `var/golden/qc_gate_report.json`）。
 
+## A 路径第 1 步已落地（2026-11-06）
+
+- 文本质量特征抽到 `pipeline/quality/text_metrics.py`，生产 L1 与标定同源；
+- `extract_quality` 纳入 clean_spacing / prose_ratio / numbering_ratio 与
+  table_cell_fill（非表格页中性 1.0），权重由 60 页全量拟合；
+- 标定脚本改为生产分量口径，输出全量权重与工作点阈值 0.43。
+
+更新后实测：
+
+| 指标 | 改造前 | 改造后 |
+| ---- | ---- | ---- |
+| 生产质量分 vs 人工总分 Spearman | 0.155 | 0.488（CV 0.598） |
+| needs_manual 一致率 | — | 0.917 |
+| QC precision / recall（阈值 0.43） | 0.333 / 0.286 | 0.667 / 0.286 |
+| verdict precision / recall | 0.333 / 0.286 | 不变 |
+
+仍缺：5 个表格/跨页表正例的分数高于阈值（表头/合并单元格/跨页续接等结构问题
+没有被现有指标捕获），需要更细的表格结构特征与更多带 `error_notes` 的正例标注。
+
+
 ## 根因
 
 1. **权重未接线**：`L1Checker._extract_quality` 使用 `_QUALITY_WEIGHTS` 常量

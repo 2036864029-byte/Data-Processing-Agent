@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -23,6 +22,7 @@ import pdf_inspector
 from _lib import GOLDEN_ROOT, read_json, write_csv
 
 from dataagent.pipeline.quality.table_metrics import table_page_metrics
+from dataagent.pipeline.quality.text_metrics import text_quality_metrics
 
 METRIC_FIELDS = (
     "sample_id",
@@ -113,63 +113,9 @@ def _metrics(
     }
 
 
-_TERMINAL_PUNCTUATION = "。！？；：.!?;:）)】」』,，"
-_NUMBERING = re.compile(
-    r"^(第[一二三四五六七八九十百千0-9]+[条章节款]"
-    r"|[一二三四五六七八九十]+、"
-    r"|[（(]\d+[）)]"
-    r"|[①-⑳]"
-    r"|\d+[.、])"
-)
-_CJK_SPACE = re.compile(r"[一-鿿]\s+[一-鿿]")
-
-
 def _text_features(markdown: str) -> dict[str, float]:
-    """从产物文本估计结构类特征（与人工结构分同向的 0–1 指标）。"""
-    lines = [line.strip() for line in markdown.splitlines() if line.strip()]
-    if not lines:
-        return {
-            "paragraph_flow": 0.0,
-            "line_length_variety": 0.0,
-            "clean_spacing": 0.0,
-            "numbering_ratio": 0.0,
-            "heading_ratio": 0.0,
-            "prose_ratio": 0.0,
-        }
-    prose = [
-        line
-        for line in lines
-        if not line.startswith("|") and not line.startswith("#")
-    ]
-    hard_wrap = (
-        sum(1 for line in prose if line[-1] not in _TERMINAL_PUNCTUATION)
-        / len(prose)
-        if prose
-        else 1.0
-    )
-    lengths = [len(line) for line in prose]
-    mean = sum(lengths) / len(lengths) if lengths else 0.0
-    variance = (
-        sum((length - mean) ** 2 for length in lengths) / len(lengths)
-        if lengths
-        else 0.0
-    )
-    variety = min((variance**0.5) / mean, 1.0) if mean else 0.0
-    cjk_spaces = len(_CJK_SPACE.findall(markdown))
-    spacing = min(cjk_spaces / max(1, len(markdown)) * 100, 1.0)
-    numbering = sum(1 for line in prose if _NUMBERING.match(line))
-    headings = sum(
-        1 for line in lines if line.startswith("#") or line.startswith("**")
-    )
-    table_lines = sum(1 for line in lines if line.startswith("|"))
-    return {
-        "paragraph_flow": round(1.0 - hard_wrap, 4),
-        "line_length_variety": round(variety, 4),
-        "clean_spacing": round(1.0 - spacing, 4),
-        "numbering_ratio": round(numbering / len(prose), 4) if prose else 0.0,
-        "heading_ratio": round(headings / len(lines), 4),
-        "prose_ratio": round(1.0 - table_lines / len(lines), 4),
-    }
+    """从产物文本估计结构类特征（与生产 L1 同一口径）。"""
+    return text_quality_metrics(markdown).as_dict()
 
 
 if __name__ == "__main__":

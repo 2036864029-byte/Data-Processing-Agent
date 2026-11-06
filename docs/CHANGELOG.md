@@ -10,6 +10,21 @@
 
 ## [未发布]
 
+### 质量分口径更新（B9 A 路径，2026-11-06）
+
+- **权重变更**：`extract_quality` 改为黄金集拟合权重
+  （glyph 0.249 / char_density 0.200 / clean_spacing 0.143 / prose 0.112 /
+  numbering 0.146 / table_cell_fill 0.150）；新增文本质量三分量；
+  非表格页的表格分量取中性 1.0；cid / reading_order / bbox 等未产出指标权重暂 0。
+- 新增 `pipeline/quality/text_metrics.py`：生产 L1 与黄金集标定共用同一文本质量口径
+  （clean_spacing / prose_ratio / numbering_ratio / paragraph_flow / heading_ratio /
+  line_length_variety）。
+- 标定脚本 `tests/eval/calibrate.py` 改为按生产分量拟合并输出全量权重；
+  工作点阈值 0.43（全量一致率 0.9167）。
+- 60 页实测：生产质量分与人工总分 Spearman 0.155 → 0.488（CV 0.598）、
+  needs_manual 一致率 0.917；QC precision/recall 0.667/0.286，门禁仍未达
+  （见 `docs/b9-calibration-diagnosis.md`）。
+
 ### 规模与中断恢复验证（PR-4-4，2026-11-06）
 
 - 新增任务级强杀续跑演练 `tests/integration/test_resume_kill.py` +

@@ -26,6 +26,7 @@ from dataagent.pipeline.quality.table_metrics import (
     ROW_OCCUPANCY_MIN,
     TABLE_CELL_FILL_MIN,
 )
+from dataagent.pipeline.quality.text_metrics import text_quality_metrics
 
 GLYPH_COVERAGE_MIN: Final[float] = 0.95
 CID_UNMAPPED_RATIO_MAX: Final[float] = 0.01
@@ -42,14 +43,22 @@ CHAR_DENSITY_MIN_BY_TYPE: Final[Mapping[PdfType, float]] = {
     PdfType.IMAGE_BASED: 0.2,
 }
 
-# extract_quality 加权合成权重（P0 初值，B9 拟合）。
+# extract_quality 加权合成权重：由 60 页黄金集按生产分量拟合（全量拟合，
+# 2026-11-06；见 tests/eval/calibrate.py 与 docs/b9-calibration-diagnosis.md）。
+# 缺失指标按可用权重归一化；表格指标在非表格页取中性 1.0，避免把“没有表格”
+# 当成表格质量差。cid / reading_order / bbox 等指标 P0 尚未产出，权重暂为 0，
+# 接入后重新标定。
 _QUALITY_WEIGHTS: Final[Mapping[str, float]] = {
-    "glyph_coverage": 0.30,
-    "cid": 0.20,
-    "char_density": 0.20,
-    "empty_region": 0.15,
-    "reading_order": 0.10,
-    "bbox_coverage": 0.05,
+    "glyph_coverage": 0.249,
+    "char_density": 0.200,
+    "clean_spacing": 0.143,
+    "prose_ratio": 0.112,
+    "numbering_ratio": 0.146,
+    "table_cell_fill": 0.150,
+    "cid": 0.0,
+    "empty_region": 0.0,
+    "reading_order": 0.0,
+    "bbox_coverage": 0.0,
 }
 
 _ATTRIBUTION: Final[Mapping[DefectCode, AttributionLabel]] = {
@@ -82,17 +91,27 @@ class L1Metrics:
     bbox_coverage: float | None = None
     header_footer_leak: float | None = None
     page_number_ok: bool | None = None
-
+    # 产物文本质量（与黄金集标定同一口径，见 text_metrics.py）
+    clean_spacing: float | None = None
+    prose_ratio: float | None = None
+    numbering_ratio: float | None = None
 
     @classmethod
     def from_text(cls, text: str, *, text_area: float) -> L1Metrics:
-        """从恢复文本构造可用的 L1 指标（字符密度 / 字形覆盖）。"""
+        """从恢复文本构造可用的 L1 指标（字符密度 / 字形覆盖 / 文本质量）。"""
         chars = [char for char in text if not char.isspace()]
         count = len(chars)
         bad = text.count("�")
         density = count / text_area if text_area > 0 else 0.0
         coverage = 1 - bad / count if count else 0.0
-        return cls(char_density=density, glyph_coverage=coverage)
+        quality = text_quality_metrics(text)
+        return cls(
+            char_density=density,
+            glyph_coverage=coverage,
+            clean_spacing=quality.clean_spacing,
+            prose_ratio=quality.prose_ratio,
+            numbering_ratio=quality.numbering_ratio,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,42 +336,34 @@ class L1Checker:
         metrics = page.metrics
         threshold = CHAR_DENSITY_MIN_BY_TYPE[page.pdf_type]
         parts: list[tuple[float, float]] = []
-        if metrics.glyph_coverage is not None:
-            parts.append(
-                (_QUALITY_WEIGHTS["glyph_coverage"], _clamp(metrics.glyph_coverage))
-            )
+
+        def add(
+            name: str, score: float | None, *, neutral: float | None = None
+        ) -> None:
+            weight = _QUALITY_WEIGHTS.get(name, 0.0)
+            if weight <= 0:
+                return
+            value = score if score is not None else neutral
+            if value is None:
+                return
+            parts.append((weight, _clamp(value)))
+
+        add("glyph_coverage", metrics.glyph_coverage)
         if metrics.cid_unmapped_ratio is not None:
-            parts.append(
-                (
-                    _QUALITY_WEIGHTS["cid"],
-                    1.0 - min(metrics.cid_unmapped_ratio / CID_UNMAPPED_RATIO_MAX, 1.0),
-                )
+            add(
+                "cid",
+                1.0 - min(metrics.cid_unmapped_ratio / CID_UNMAPPED_RATIO_MAX, 1.0),
             )
         if metrics.char_density is not None:
-            parts.append(
-                (
-                    _QUALITY_WEIGHTS["char_density"],
-                    min(metrics.char_density / threshold, 1.0),
-                )
-            )
+            add("char_density", min(metrics.char_density / threshold, 1.0))
         if metrics.empty_region_ratio is not None:
-            parts.append(
-                (
-                    _QUALITY_WEIGHTS["empty_region"],
-                    1.0 - min(metrics.empty_region_ratio, 1.0),
-                )
-            )
-        if metrics.reading_order_score is not None:
-            parts.append(
-                (
-                    _QUALITY_WEIGHTS["reading_order"],
-                    _clamp(metrics.reading_order_score),
-                )
-            )
-        if metrics.bbox_coverage is not None:
-            parts.append(
-                (_QUALITY_WEIGHTS["bbox_coverage"], _clamp(metrics.bbox_coverage))
-            )
+            add("empty_region", 1.0 - min(metrics.empty_region_ratio, 1.0))
+        add("reading_order", metrics.reading_order_score)
+        add("bbox_coverage", metrics.bbox_coverage)
+        add("clean_spacing", metrics.clean_spacing)
+        add("prose_ratio", metrics.prose_ratio)
+        add("numbering_ratio", metrics.numbering_ratio)
+        add("table_cell_fill", metrics.table_cell_fill, neutral=1.0)
         if not parts:
             return 0.0
         total_weight = sum(weight for weight, _ in parts)
