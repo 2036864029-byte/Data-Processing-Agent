@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from dataagent.kernel.plan import parse_plan
+from dataagent.pipeline.quality.gate import InMemoryQualityResultStore
 from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.factory import create_builtin_runner
 
@@ -229,3 +230,20 @@ def test_manifest_is_off_by_default(tmp_path: Path) -> None:
     runner.run([tmp_path / "a.txt"], task_id="manifest-off")
 
     assert not (tmp_path / "out" / "manifest.jsonl").exists()
+
+
+def test_process_pages_uses_injected_quality_store(
+    tmp_path: Path,
+    write_pdf: Callable[[Path, list[list[str]]], Path],
+) -> None:
+    store = InMemoryQualityResultStore()
+    sample = write_pdf(tmp_path / "qc.pdf", [dense_lines("alpha")])
+    runner = create_builtin_runner(
+        output_dir=tmp_path / "out", quality_store=store
+    )
+
+    outcome = runner.process_pages(sample, [1], task_id="qc-store")
+
+    report = store.load(outcome.doc_id, 1)
+    assert report is not None
+    assert 0.0 <= report.extract_quality <= 1.0

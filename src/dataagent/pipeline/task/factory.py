@@ -21,6 +21,7 @@ from dataagent.pipeline.ingest.ingestor import (
 )
 from dataagent.pipeline.output.targets import DeliverTarget, DeliverTargetRouter
 from dataagent.pipeline.profile.writer import InMemoryProfileStore, PageProfileWriter
+from dataagent.pipeline.quality.gate import QualityResultStore
 from dataagent.pipeline.route.routes import (
     InMemoryRouteDecisionStore,
     RegistryPdfClassifier,
@@ -46,6 +47,7 @@ def create_builtin_runner(
     config: TaskConfig | None = None,
     telemetry: TaskTelemetry | None = None,
     progress: TaskProgressStore | None = None,
+    quality_store: QualityResultStore | None = None,
     supervisor: Supervisor | None = None,
     state_repository: ProgressRepository | None = None,
     state_store: TaskStateStore | None = None,
@@ -90,6 +92,7 @@ def create_builtin_runner(
         pending=pending_queue,
         telemetry=telemetry,
         progress=progress,
+        quality_store=quality_store,
         supervisor=supervisor,
         state_repository=state_repository,
         state_store=state_store,

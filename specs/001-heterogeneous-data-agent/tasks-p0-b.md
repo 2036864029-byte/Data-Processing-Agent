@@ -230,7 +230,8 @@ description: "P0-B 功能模块层任务清单（B1–B9 + Plan 执行器 + 集�
 
 ### 测试（TDD：先红后绿）⚠️
 
-- [ ] T122 [B9] 黄金集建设 — 200 页黄金集（六类各 ≥ 20 页）：本地样本（`doc/test_pdf/`，**不入库**）+ 构造样本（表格跨页 / 页眉页脚 / 分栏错序，research R6）；人工四维打分；样本与标注保持本地私有
+- [x] T122 [B9] 黄金集建设 — 200 页黄金集（六类各 ≥ 20 页）：本地样本（`doc/test_pdf/`，**不入库**）+ 构造样本（表格跨页 / 页眉页脚 / 分栏错序，research R6）；人工四维打分；样本与标注保持本地私有
+  - 实测：200 页 = 六类 33/33/33/33/34/34；人工子集 60 页（六类各 10，`annotations.csv` 四维齐全、`label_source=human`）；样本与标注仅存 `var/golden/`（git 忽略）。标注查看与导出见 `tests/eval/prepare_review.py` / `import_annotations.py`。
 - [ ] T123 [B9] `extract_quality` 标定脚本 `tests/eval/` — 权重拟合 + 阈值工作点（R2）；`fidelity` 与人工分 Spearman > 0.8、一致率 ≥ 0.85
 - [ ] T124 [B9] 评测脚本 + 指标门禁 — STP ≥ 80%（SC-003）、误放率 ≤ 2%、QC precision ≥ 0.95 / recall ≥ 0.90（SC-012）、文档级勾稽通过率 ≥ 99%（SC-013）；**文本还原 CER ≤ 2%（简单页）/ ≤ 5%（中等页）、表格结构 TEDS ≥ 0.80（原生）/ ≥ 0.85（含后处理）、标题层级准确率 ≥ 0.78、关键字段 exact match ≥ 98%（SC-006）**；`fast` 档 STP 报告必须标注"不可用于验收"（宪法复现性承诺）
 
