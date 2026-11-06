@@ -252,6 +252,11 @@ DocumentStructure（页 → 块序列：heading/text/table，块带 block_id/bbo
 
 **验收**：下载四项功能测试；NL 路由命中与回退测试；manifest 与落盘产物对账；中断恢复演练通过。
 
+**PR-4-4 已落地（目标硬件项除外）**：任务级强杀续跑演练（真实子进程 + PG 状态
+存储 + 哨兵校验已完成产物不被重写）、`verify_manifest` 双向对账（函数 + 运维脚本）；
+吞吐 ≥30 万页/日与 72h 泄漏仍需 16C64G 交付硬件连续压测，命令与门槛见
+`docs/scale-validation.md`。
+
 ## 7. 明确不动的边界
 
 - 解析与择优链路本身（`route_tables`、验收网关、阈值）不改逻辑，只接调用；

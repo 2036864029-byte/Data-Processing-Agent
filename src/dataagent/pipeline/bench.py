@@ -144,7 +144,7 @@ def run_bench(
         _gate("单页 p50 ≤ 120ms", percentile(latencies, 0.50) <= P50_LIMIT_MS),
         _gate("单页 p95 ≤ 250ms", percentile(latencies, 0.95) <= P95_LIMIT_MS),
         _gate("内存峰值 ≤ 50MB", peak_memory <= MEMORY_LIMIT_MB),
-        _gate("文件打开次数 ≤ ⌈页数/批大小⌉+2", estimated <= budget),
+        _gate("文件打开次数 ≤ ceil(页数/批大小)+2", estimated <= budget),
         _gate(
             "批大小 / worker 按公式计算",
             resolved_batch <= MAX_BATCH_PAGES and workers >= 1,

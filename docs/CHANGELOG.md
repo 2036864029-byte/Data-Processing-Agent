@@ -10,6 +10,19 @@
 
 ## [未发布]
 
+### 规模与中断恢复验证（PR-4-4，2026-11-06）
+
+- 新增任务级强杀续跑演练 `tests/integration/test_resume_kill.py` +
+  `scripts/resume_demo_task.py`：真实子进程 + PG 状态存储 + 流式落盘；
+  首个文档完成并记录后强杀，重启后已完成文档产物不被重写（哨兵校验）、
+  其余文档续跑，收尾 manifest 与落盘产物对账通过。
+- 新增 `verify_manifest(output_dir)`：双向对账（清单里的 md/json/tables key
+  必须有文件；交付目录下的产物必须被清单引用）；脚本
+  `scripts/verify_manifest.py` 供运维直接执行。
+- `scripts/e2e_p0.py` 额外输出本机短样本吞吐（明确非目标硬件验收值）。
+- 目标硬件项（16C64G 连续 1h ≥30 万页/日、72h 泄漏 <5%）仍需在交付硬件执行，
+  见 `docs/scale-validation.md`。
+
 ### 交付目标扩展（PR-4-3，2026-11-06）
 
 - 新增 `pipeline/output/targets.py`：交付目标注册表 + P0 确定性 NL 路由。

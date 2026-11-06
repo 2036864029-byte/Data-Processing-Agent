@@ -191,6 +191,11 @@ def _print_summary(outcome: TaskOutcome) -> None:
         f"平均质量={outcome.stats.avg_extract_quality:.3f} "
         f"耗时={outcome.stats.duration_s:.2f}s"
     )
+    if outcome.stats.duration_s > 0:
+        print(
+            f"吞吐={outcome.stats.pages_processed / outcome.stats.duration_s:.1f} 页/秒"
+            "（本机短样本，非目标硬件验收值）"
+        )
     print("── 报告（Markdown 前 12 行）──")
     for line in outcome.report.to_markdown().splitlines()[:12]:
         print(line)

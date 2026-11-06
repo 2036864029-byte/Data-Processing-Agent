@@ -108,11 +108,21 @@ PYTHONPATH=src uv run lint-imports
 bash scripts/check-gates.sh
 ```
 
-续跑演示（真实强杀进程，验证已完成批不重做）：
+续跑演示（真实强杀进程）：
 
 ```bash
-uv run pytest tests/e2e/test_resume_demo.py -q
+uv run pytest tests/e2e/test_resume_demo.py -q      # worker 批级：已完成批不重做
+uv run pytest tests/integration/test_resume_kill.py -q  # 任务级：已完成文档产物不被重写
 ```
+
+manifest 与落盘产物对账：
+
+```bash
+uv run python scripts/verify_manifest.py var/output
+```
+
+规模基线、目标硬件门槛与恢复演练说明见
+[`docs/scale-validation.md`](docs/scale-validation.md)。
 
 ## 目录结构
 
@@ -130,12 +140,15 @@ specs/             # spec / plan / research / data-model / contracts / tasks
 
 ## 当前阶段
 
-P0-A 基础支撑层（A1–A9）已完成；P0-B 功能模块层待启动。任务拆解见
-`specs/001-heterogeneous-data-agent/tasks.md` 与 `tasks-p0-b.md`。
+P0-A / P0-B 已完成；交付产物升级 PR-1 ~ PR-4-4 已落地（结构树双视图、表格择优、
+manifest、下载层、交付目标路由、中断恢复与对账）。目标硬件压测与 B9 标定仍是
+未勾选门禁，见 `docs/scale-validation.md` 与 `tasks-p0-b.md`。
 
 ## 文档
 
 - [CHANGELOG](docs/CHANGELOG.md)
 - [回归必写测试盘点](docs/regression-inventory.md)
+- [交付目标与 NAS 挂载](docs/delivery-targets.md)
+- [规模与中断恢复验证](docs/scale-validation.md)
 - [架构决策记录 ADR](docs/ADR/)
 - [端到端验证指南](specs/001-heterogeneous-data-agent/quickstart.md)
