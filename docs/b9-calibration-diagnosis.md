@@ -68,6 +68,27 @@
 - 标注完成后合并：`import_annotations.py --filled var/golden/annotations_filled_v2.csv`，
   再运行 `calibrate.py` / `qc_gate_report.py` 复核门禁。
 
+## 标注对象错位与修正（2026-11-07）
+
+- 原查看器右侧调用 `pdf_inspector.extract_pages_markdown`，展示的是优化前的原始 Markdown；
+  最终交付物（HTML 表 + 结构 JSON）从未进入标注流程。第一批 60 个 `parsed/*.md`
+  **全部 0 个 `<table>`**。
+- 例：R-0041 的最终交付 Markdown 含 3 个 `<table>`（含 `rowspan` 与 `<!--table:tNNN-->` 锚点），
+  旧查看器展示的是竖线表；R-0073 等跨页表同样如此。
+- 修复：`prepare_review.py` 现在按文件跑当前流水线（处理窗口含相邻页，用于跨页表衔接），
+  按页取最终 Markdown / 结构 JSON；右侧改为“最终产物（HTML 渲染）/ Markdown 源码 / JSON”
+  三视图；缺口页显示交付占位；每页记录 `artifact_hash` 并写入导出 CSV。
+- 第一批新旧对照（`parsed/` vs `parsed_final/`）：
+  - **31/60 完全一致**，旧标签可沿用；
+  - **29 页有差异**：21 页新增 HTML 表（全部单表/跨页表页 + R-0033）、
+    6 页最终交付为缺口占位（R-0077/R-0098/R-0102 多栏、R-0139/R-0140 扫描、R-0162 编码损坏）、
+    R-0023/R-0107 文本小幅变化。
+  - 因此表格页与缺口页的分数必须按最终产物重评；文本类未变化页无需重打。
+- 查看器路径：
+  - 第一批最终产物：`var/golden/review_final/index.html`（`parsed_final/`，导出 `annotations_filled_final.csv`）
+  - 第二批最终产物：`var/golden/review_v2/index.html`（`parsed_v2/`，导出 `annotations_filled_v2.csv`）
+  - 旧 `review/` 与 `parsed/` 保留为原始抽取基线，不再用于验收。
+
 ## 黄金集结构问题（2026-11-07 发现）
 
 - `cross_page_table` 的 33 页里 **26 页是同一构造模板的克隆**（抽取 Markdown 完全一致），

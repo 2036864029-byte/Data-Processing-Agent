@@ -14,10 +14,15 @@
 # B. 采集每页代理指标（历史口径；标定脚本现已直接按生产 L1 分量计算）
 .venv/Scripts/python.exe tests/eval/collect_metrics.py
 
-# 生成 60 页对照查看器（左页图 + 右产物 + 打分控件）
+# 生成对照查看器（左页图 + 右侧最终交付物；会跑当前流水线，较慢）
 .venv/Scripts/python.exe tests/eval/prepare_review.py
 # 用浏览器打开 var/golden/review/index.html 逐页打分，完成后导出 annotations_filled.csv
 .venv/Scripts/python.exe tests/eval/import_annotations.py
+
+# 第一批“最终产物”查看器（旧 review/parsed 为原始抽取基线，不覆盖）
+.venv/Scripts/python.exe tests/eval/prepare_review.py \
+  --sheet var/golden/human_sheet.csv --out var/golden/review_final \
+  --parsed var/golden/parsed_final --export-name annotations_filled_final.csv
 
 # 增量批次（A 路径）：从剩余真实页面按分类别风险优先选页（最多 60；
 # 跨页表真实样本不足时少于 60），生成 review_v2
@@ -42,6 +47,11 @@
 
 ## 人工打分约定
 
+- **右侧默认展示最终交付物**：表格是流水线路由（含 pdfplumber L2）后的 HTML 表，
+  可切换 Markdown 源码与结构 JSON；缺口页显示交付占位。卡片上的 `artifact_hash`
+  是本次展示的产物版本，导出 CSV 会带上该列。
+- 旧 `review/` / `parsed/` 是“原始 pdf-inspector 抽取”基线；最终验收以
+  `review_final/` / `parsed_final/`（第一批）与 `review_v2/` / `parsed_v2/`（第二批）为准。
 - 四维各 0–3 分：`dim_text`（文本还原）、`dim_structure`（结构还原）、
   `dim_semantic`（语义还原）、`dim_layout`（版式还原）；
 - `dim_table`（仅表格页）：表格专项 0–3（表头/列对齐/合并单元格/单元格内容完整性），

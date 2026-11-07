@@ -11,23 +11,192 @@
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import pdf_inspector
 import pypdfium2 as pdfium
 from _lib import GOLDEN_ROOT, read_csv, read_json, write_json
 
+from dataagent.contracts.structure import DocumentStructure
+from dataagent.pipeline.output.structure_view import to_markdown_view
 from dataagent.pipeline.quality.numbering import repair_numbering
 from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
+from dataagent.pipeline.task.factory import create_builtin_runner
 from dataagent.platform.plugins.adapters.text_layer import probe_text_layer
 
 REVIEW_ROOT = GOLDEN_ROOT / "review"
 PARSED_ROOT = GOLDEN_ROOT / "parsed"
 RENDER_SCALE = 1.6
+
+
+def _collect_artifacts(
+    rows: list[dict[str, str]], manifest: dict[str, dict[str, Any]]
+) -> dict[tuple[str, int], dict[str, Any]]:
+    """按文件跑当前流水线（含相邻页），取每页的最终 Markdown 与结构 JSON。"""
+    del manifest
+    by_file: dict[str, set[int]] = defaultdict(set)
+    for row in rows:
+        by_file[str(row["file"])].add(int(row["page_no"]))
+
+    artifacts: dict[tuple[str, int], dict[str, Any]] = {}
+    for file_name, pages in sorted(by_file.items()):
+        path = Path(file_name)
+        if not path.is_file():
+            continue
+        window = sorted(
+            {page for target in pages for page in (target - 1, target, target + 1) if page >= 1}
+        )
+        try:
+            with TemporaryDirectory() as output_dir:
+                runner = create_builtin_runner(output_dir=output_dir)
+                outcome = runner.process_pages(
+                    path, window, task_id="review-artifact"
+                )
+                md_path = next(
+                    (Path(item) for item in outcome.outputs if item.endswith(".md")),
+                    None,
+                )
+                full_markdown = (
+                    md_path.read_text(encoding="utf-8")
+                    if md_path is not None
+                    else ""
+                )
+                json_path = next(
+                    (
+                        Path(item)
+                        for item in outcome.outputs
+                        if item.endswith(".json") and not item.endswith(".tables.json")
+                    ),
+                    None,
+                )
+                payload = (
+                    json.loads(json_path.read_text(encoding="utf-8"))
+                    if json_path is not None
+                    else None
+                )
+                structure_payload = (
+                    payload.get("structure")
+                    if isinstance(payload, dict)
+                    else None
+                )
+                structure = (
+                    DocumentStructure.model_validate(structure_payload)
+                    if isinstance(structure_payload, dict)
+                    else None
+                )
+                for page in pages:
+                    markdown = (
+                        to_markdown_view(
+                            structure, page_order=[page], fallback={}
+                        )
+                        if structure is not None
+                        else ""
+                    )
+                    gap = False
+                    if not markdown.strip():
+                        markdown = _gap_section(full_markdown, page)
+                        gap = bool(markdown.strip())
+                    artifacts[(file_name, page)] = {
+                        "markdown": markdown,
+                        "json": _page_json(payload, page),
+                        "status": outcome.status,
+                        "gap_pages": outcome.gap_pages,
+                        "gap": gap,
+                    }
+        except Exception as exc:
+            for page in pages:
+                artifacts[(file_name, page)] = {
+                    "error": f"{type(exc).__name__}: {exc}"
+                }
+    return artifacts
+
+
+def _page_json(payload: dict[str, Any] | None, page_no: int) -> str:
+    if payload is None:
+        return ""
+    if "structure" not in payload:
+        # 无结构树的旧格式产物：原样展示，避免注入空结构误导
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+    structure = payload.get("structure") or {}
+    pages = [
+        page
+        for page in structure.get("pages", [])
+        if int(page.get("page_no", -1)) == page_no
+    ]
+    return json.dumps(
+        {
+            "meta": payload.get("meta"),
+            "structure": {
+                "doc_id": structure.get("doc_id", ""),
+                "pages": pages,
+            },
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def _artifact_hash(markdown: str) -> str:
+    return hashlib.sha256(markdown.encode("utf-8")).hexdigest()[:16]
+
+
+_GAP_MARKER = re.compile(
+    r"<!-- dataagent:gap page=(\d+) [^>]*-->\s*(?:>.*(?:\n|$))*"
+)
+
+
+def _gap_section(markdown: str, page_no: int) -> str:
+    """从交付 Markdown 中取某页的缺口占位段（结构树会跳过 gap 页）。
+
+    占位段只有注释行 + 紧随的引用行；不能一直取到下一个缺口标记，
+    否则会把后续已还原页面的正文带进来。
+    """
+    for marker in _GAP_MARKER.finditer(markdown):
+        if int(marker.group(1)) == page_no:
+            return marker.group(0).strip()
+    return ""
+
+
+_TABLE_BLOCK = re.compile(r"(<table>.*?</table>)", re.DOTALL)
+_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+
+
+def _markdown_to_html(markdown: str) -> str:
+    """把交付 Markdown 转成浏览器可读 HTML：表格原样渲染，其余文本转义。"""
+    parts: list[str] = []
+    for chunk in _TABLE_BLOCK.split(markdown):
+        if chunk.startswith("<table>"):
+            parts.append(chunk)
+        else:
+            parts.append(_text_to_html(chunk))
+    return "".join(parts)
+
+
+def _text_to_html(text: str) -> str:
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    blocks: list[str] = []
+    for block in re.split(r"\n\s*\n", text):
+        lines = [line for line in block.splitlines() if line.strip()]
+        if not lines:
+            continue
+        match = _HEADING.match(lines[0].strip())
+        if match is not None and len(lines) == 1:
+            level = len(match.group(1))
+            blocks.append(
+                f"<h{level}>{html.escape(match.group(2))}</h{level}>"
+            )
+            continue
+        blocks.append(
+            "<p>" + "<br>".join(html.escape(line) for line in lines) + "</p>"
+        )
+    return "".join(blocks)
 
 
 def prepare(
@@ -53,16 +222,41 @@ def prepare(
         stale.unlink()
 
     entries: list[dict[str, Any]] = []
+    artifacts = _collect_artifacts(rows, manifest)
     for row in rows:
         sample_id = row["sample_id"]
         file_path = Path(row["file"])
         if not file_path.exists():
             continue
         page_index = int(row["page_no"]) - 1
-        markdown = _extract_page_markdown(file_path, page_index)
+        raw_markdown = _extract_page_markdown(file_path, page_index)
         meta = manifest.get(sample_id, {})
-        status, display, banner = _diagnose(file_path, page_index, markdown, meta)
-        display = repair_numbering(normalize_cjk_text(display))
+        status, fallback_display, banner = _diagnose(
+            file_path, page_index, raw_markdown, meta
+        )
+        artifact = artifacts.get((row["file"], int(row["page_no"])), {})
+        delivered = str(artifact.get("markdown") or "")
+        if delivered.strip():
+            display = delivered
+            artifact_source = "delivered"
+            if artifact.get("gap"):
+                banner = (
+                    "该页在最终交付中为缺口占位（未通过质检，正文不输出）；"
+                    "请判断这种结果是否可用于自动化下游。"
+                    + (f" {banner}" if banner else "")
+                )
+            else:
+                banner = (
+                    "右侧为最终交付物：表格由流水线路由并以 HTML 渲染"
+                    "（处理窗口含相邻页，用于跨页表衔接）。"
+                    + (f" {banner}" if banner else "")
+                )
+        else:
+            display = repair_numbering(normalize_cjk_text(fallback_display))
+            artifact_source = "raw"
+            error = artifact.get("error")
+            if error:
+                banner = f"流水线处理失败，展示原始抽取：{error}"
         parsed_path = parsed_root / f"{sample_id}.md"
         parsed_path.write_text(display, encoding="utf-8")
         image_path = images / f"{sample_id}.png"
@@ -77,6 +271,10 @@ def prepare(
                 "image": f"images/{sample_id}.png",
                 "parsed": str(parsed_path),
                 "markdown": display,
+                "markdown_html": _markdown_to_html(display),
+                "json": str(artifact.get("json") or ""),
+                "artifact_hash": _artifact_hash(display),
+                "artifact_source": artifact_source,
                 "status": status,
                 "banner": banner,
                 "table_rows": meta.get("table_rows", ""),
@@ -154,10 +352,12 @@ def _render_html(
     entries: list[dict[str, Any]], *, export_name: str = "annotations_filled.csv"
 ) -> str:
     cards = "\n".join(_card(entry) for entry in entries)
+    state_key = "dataagent_golden_scores_" + re.sub(r"\W+", "_", export_name)
     return (
         _TEMPLATE.replace("__CARDS__", cards)
         .replace("__COUNT__", str(len(entries)))
         .replace("__EXPORT_NAME__", export_name)
+        .replace("__STATE_KEY__", state_key)
     )
 
 
@@ -166,7 +366,11 @@ def _card(entry: dict[str, Any]) -> str:
     category = html.escape(entry["category"])
     source = html.escape(entry["source"])
     file_name = html.escape(Path(entry["file"]).name)
-    markdown = html.escape(entry["markdown"])
+    markdown_html = entry["markdown_html"]
+    markdown_source = html.escape(entry["markdown"])
+    json_text = html.escape(entry["json"] or "{}")
+    artifact_hash = html.escape(entry.get("artifact_hash", ""))
+    artifact_source = html.escape(entry.get("artifact_source", "raw"))
     banner = html.escape(entry["banner"])
     size = ""
     if entry["table_cells"] not in ("", None, "0"):
@@ -183,17 +387,30 @@ def _card(entry: dict[str, Any]) -> str:
             '<span class="muted">仅表格页；不计入总分</span></label>'
         )
     return f"""
-<section class="card" data-sample="{sample_id}" data-category="{category}">
+<section class="card" data-sample="{sample_id}" data-category="{category}"
+         data-artifact="{artifact_hash}">
   <header>
     <strong>{sample_id}</strong>
     <span class="tag">{category}</span>
     <span class="tag status-{html.escape(entry["status"])}">{html.escape(entry["status"])}</span>
-    <span class="muted">{source} · {file_name} · 第 {entry["page_no"]} 页</span>
+    <span class="tag">artifact:{artifact_source}</span>
+    <span class="muted">{source} · {file_name} · 第 {entry["page_no"]} 页
+      · hash {artifact_hash}</span>
     {size}
   </header>
   <div class="body">
     <div class="pane"><img src="{entry["image"]}" alt="{sample_id}"></div>
-    <div class="pane">{banner_html}<pre>{markdown}</pre></div>
+    <div class="pane">
+      {banner_html}
+      <div class="tabs">
+        <button class="tab active" data-tab="render">最终产物</button>
+        <button class="tab" data-tab="source">Markdown 源码</button>
+        <button class="tab" data-tab="json">JSON</button>
+      </div>
+      <div class="tabbody active" data-tab="render">{markdown_html}</div>
+      <div class="tabbody" data-tab="source"><pre>{markdown_source}</pre></div>
+      <div class="tabbody" data-tab="json"><pre>{json_text}</pre></div>
+    </div>
   </div>
   <div class="scores">
     <label>文本还原 <select data-dim="dim_text">{_options()}</select></label>
@@ -204,7 +421,7 @@ def _card(entry: dict[str, Any]) -> str:
       <span class="muted">块位置/分栏/bbox</span></label>
     {table_score}
     <label class="manual"><input type="checkbox" data-dim="needs_manual"> 需要人工介入</label>
-    <input class="notes" data-dim="error_notes" placeholder="问题备注（可选）">
+    <input class="notes" data-dim="error_notes" placeholder="问题备注（勾选需介入时必填）">
   </div>
 </section>
 """
@@ -251,6 +468,16 @@ _TEMPLATE = """<!doctype html>
   .pane img { max-width: 100%; border: 1px solid #ccc; }
   .pane pre { max-height: 70vh; overflow: auto; background: #fafafa; border: 1px solid #e5e5e5;
               padding: 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+  .tab { padding: 3px 8px; border: 1px solid #ccc; background: #fff; color: #333;
+         border-radius: 3px; cursor: pointer; font-size: 12px; }
+  .tab.active { background: #2f6fed; color: #fff; border-color: #2f6fed; }
+  .tabbody { display: none; max-height: 70vh; overflow: auto; background: #fafafa;
+             border: 1px solid #e5e5e5; padding: 10px; }
+  .tabbody.active { display: block; }
+  .tabbody pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+  .tabbody table { border-collapse: collapse; font-size: 12px; }
+  .tabbody th, .tabbody td { border: 1px solid #bbb; padding: 3px 6px; vertical-align: top; }
   .banner { background: #fff4e5; border: 1px solid #f0c36d; color: #7a4a00;
             padding: 8px 10px; margin-bottom: 8px; font-size: 13px; border-radius: 4px; }
   .scores { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px; }
@@ -264,10 +491,12 @@ _TEMPLATE = """<!doctype html>
   <button id="export">导出 __EXPORT_NAME__</button>
 </div>
 <div class="hint">
-  对照左侧 PDF 页面图与右侧系统产物打分：四维各 0–3（3 最好，0 不可用），并标记是否需要人工介入。
+  对照左侧 PDF 页面图与右侧产物打分：四维各 0–3（3 最好，0 不可用），并标记是否需要人工介入。
+  右侧默认展示<b>最终交付物</b>：表格是流水线路由后以 HTML 渲染的表（不是原始 Markdown 竖线表），
+  可切换查看 Markdown 源码与结构 JSON；卡片上的 hash 是本次展示产物版本。
   空产物页会显示状态：<b>needs_ocr</b> 表示无文本层（需 OCR）；
-  <b>suspected_garbled</b> 表示引擎判定疑似乱码，
-  右侧回退展示原生文本项。打分自动保存在本浏览器；完成后点“导出”，把文件放到
+  <b>suspected_garbled</b> 表示引擎判定疑似乱码，右侧回退展示原生文本项。
+  打分自动保存在本浏览器；完成后点“导出”，把文件放到
   <code>var/golden/__EXPORT_NAME__</code>，
   然后运行
   <code>python tests/eval/import_annotations.py --filled
@@ -296,7 +525,7 @@ _TEMPLATE = """<!doctype html>
 </details>
 __CARDS__
 <script>
-const KEY = "dataagent_golden_scores_v1";
+const KEY = "__STATE_KEY__";
 const state = JSON.parse(localStorage.getItem(KEY) || "{}");
 const cards = Array.from(document.querySelectorAll(".card"));
 
@@ -335,6 +564,15 @@ function csvEscape(value) {
   const text = String(value ?? "");
   return /[",\\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const card = btn.closest(".card");
+    card.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+    card.querySelectorAll(".tabbody").forEach(
+      b => b.classList.toggle("active", b.dataset.tab === btn.dataset.tab)
+    );
+  });
+});
 document.getElementById("export").addEventListener("click", () => {
   for (const card of cards) {
     const e = state[card.dataset.sample] || {};
@@ -344,7 +582,8 @@ document.getElementById("export").addEventListener("click", () => {
     }
   }
   const header = ["sample_id","dim_text","dim_structure","dim_semantic","dim_layout",
-                  "dim_table","needs_manual","error_notes","annotator","date","label_source"];
+                  "dim_table","needs_manual","error_notes","annotator","date","label_source",
+                  "artifact_hash"];
   const lines = [header.join(",")];
   cards.forEach(card => {
     const e = state[card.dataset.sample] || {};
@@ -352,7 +591,7 @@ document.getElementById("export").addEventListener("click", () => {
       card.dataset.sample, e.dim_text ?? "", e.dim_structure ?? "",
       e.dim_semantic ?? "", e.dim_layout ?? "", e.dim_table ?? "",
       e.needs_manual ? "是" : "否",
-      e.error_notes ?? "", "", "", "human",
+      e.error_notes ?? "", "", "", "human", card.dataset.artifact ?? "",
     ].map(csvEscape).join(","));
   });
   const blob = new Blob(["\\ufeff" + lines.join("\\n")], {type: "text/csv;charset=utf-8"});

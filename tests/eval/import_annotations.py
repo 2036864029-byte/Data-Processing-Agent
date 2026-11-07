@@ -51,6 +51,9 @@ def merge(
         target["annotator"] = row.get("annotator", "") or target.get("annotator", "")
         target["date"] = row.get("date", "") or date.today().isoformat()
         target["label_source"] = "human"
+        target["artifact_hash"] = row.get("artifact_hash", "") or target.get(
+            "artifact_hash", ""
+        )
         merged += 1
 
     write_csv(annotations_path, annotations, ANNOTATION_FIELDS)

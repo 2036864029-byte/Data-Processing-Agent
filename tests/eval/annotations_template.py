@@ -36,6 +36,7 @@ ANNOTATION_FIELDS = (
     "annotator",
     "date",
     "label_source",
+    "artifact_hash",
 )
 
 
