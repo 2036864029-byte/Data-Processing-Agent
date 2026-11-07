@@ -19,7 +19,8 @@
 # 用浏览器打开 var/golden/review/index.html 逐页打分，完成后导出 annotations_filled.csv
 .venv/Scripts/python.exe tests/eval/import_annotations.py
 
-# 增量批次（A 路径）：从剩余 140 页按结构风险优先选 60 页，生成 review_v2
+# 增量批次（A 路径）：从剩余真实页面按分类别风险优先选页（最多 60；
+# 跨页表真实样本不足时少于 60），生成 review_v2
 .venv/Scripts/python.exe tests/eval/annotations_template_v2.py
 .venv/Scripts/python.exe tests/eval/prepare_review.py \
   --sheet var/golden/human_sheet_v2.csv --out var/golden/review_v2 \

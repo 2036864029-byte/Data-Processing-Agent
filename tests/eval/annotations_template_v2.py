@@ -1,8 +1,9 @@
 """增量人工标注批次（B9 A 路径）：优先挑选结构风险高的页面。
 
-第一批 60 页（六类各 10）已标注；本脚本从剩余页面中为每类再选 10 页，
-其中 6 页按风险分（表格填充/结构、文本断行/空格、扫描与乱码）优先，
-4 页确定性抽样以保留负例。输出 `var/golden/human_sheet_v2.csv`。
+第一批 60 页（六类各 10）已标注；本脚本从剩余**真实**页面中为每类再选 10 页，
+其中 6 页按分类别风险分（表格填充/表头/列方差；文本断行/空格）优先，
+4 页确定性抽样以保留负例。构造样本不进第二批（第一批已有且多为同模板克隆）。
+输出 `var/golden/human_sheet_v2.csv`。
 
 正例偏多才有足够样本来标定 QC 阈值；标注时要求表格页填 `dim_table`，
 勾选“需要人工介入”必须写 `error_notes`（查看器已强制）。
@@ -44,7 +45,9 @@ def build() -> dict[str, Any]:
         candidates = [
             row
             for row in manifest
-            if row["category"] == category and row["sample_id"] not in existing
+            if row["category"] == category
+            and row["sample_id"] not in existing
+            and row.get("source") == "real"
         ]
         scored = [
             (risk, row) for row in candidates if (risk := _risk(row)) is not None
@@ -78,18 +81,22 @@ def _risk(row: dict[str, Any]) -> float | None:
     except Exception:
         return None
     markdown = result.pages[0].markdown if result.pages else ""
+    category = str(row.get("category", ""))
     risk = 0.0
-    if markdown.strip():
+    if category in {"single_table", "cross_page_table"}:
+        table = table_page_metrics(markdown) if "|" in markdown else None
+        if table is None:
+            risk += 1.5 + (0.0 if markdown.strip() else 1.0)
+        else:
+            risk += (1.0 - table.cell_fill) * 2.0
+            risk += 0.0 if table.header_ok else 1.0
+            risk += min(table.column_variance / 2.0, 1.0)
+    elif markdown.strip():
+        # 文本类页面才用文本质量；表格页的行占比低是正常的，不是风险
         text = text_quality_metrics(markdown)
         risk += (1.0 - text.clean_spacing) * 2.0
         risk += 1.0 - text.prose_ratio
         risk += 1.0 - text.paragraph_flow
-        if "|" in markdown:
-            table = table_page_metrics(markdown)
-            if table is not None:
-                risk += (1.0 - table.cell_fill) * 2.0
-                risk += 0.0 if table.header_ok else 1.0
-                risk += min(table.column_variance / 2.0, 1.0)
     layer = str(row.get("text_layer", ""))
     if layer in {"garbled_text_layer", "pure_scan"}:
         risk += 2.0

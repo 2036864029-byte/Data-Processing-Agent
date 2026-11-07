@@ -59,13 +59,24 @@
 
 ### A2 增量标注已准备（2026-11-06）
 
-- `tests/eval/annotations_template_v2.py` 从剩余 140 页按结构风险优先选 60 页
-  （每类 6 个高风险 + 4 个确定性抽样），正例密度更高；
+- `tests/eval/annotations_template_v2.py` 从剩余**真实**页面按分类别风险优先选页面
+  （每类最多 6 个高风险 + 4 个确定性抽样），构造样本不进第二批；
+- 实际生成 **53 页**：五类各 10 页 + 跨页表 3 页（真实跨页表样本不足，见下）；
 - `var/golden/human_sheet_v2.csv` 与 `var/golden/review_v2/index.html` 已生成，
   `parsed_v2/` 与第一批的 `parsed/` 隔离，不会覆盖已标注基准；
 - 查看器强制：勾选“需要人工介入”必须填写问题备注；表格页要求填 `dim_table`；
 - 标注完成后合并：`import_annotations.py --filled var/golden/annotations_filled_v2.csv`，
   再运行 `calibrate.py` / `qc_gate_report.py` 复核门禁。
+
+## 黄金集结构问题（2026-11-07 发现）
+
+- `cross_page_table` 的 33 页里 **26 页是同一构造模板的克隆**（抽取 Markdown 完全一致），
+  真实跨页表只有 7 页；第一批已用 4 页，第二批只能再补 3 页。
+- 也就是说该类“≥20 页”只在页数上成立，独立样本远少于 20；跨页表的标定与评测
+  目前都不可靠。
+- 其余五类均为真实页面（单表 34 / 纯文本 34 / 多栏 33 / 扫描 33 / 编码损坏 33）。
+- 建议：从 `doc/test_pdf/` 继续抽取真实相邻表页，补足跨页表独立样本后重跑标定；
+  在此之前跨页表的 Spearman/QC 指标不应作为验收依据。
 
 
 

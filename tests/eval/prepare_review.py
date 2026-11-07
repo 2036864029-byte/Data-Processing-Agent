@@ -1,8 +1,8 @@
-"""生成 60 页人工打分的对照查看器（B9 标注准备）。
+"""生成人工打分的对照查看器（B9 标注准备）。
 
 为每个样本页渲染 PNG（pypdfium2）并抽取该页 Markdown，生成
 `var/golden/review/index.html`：左页图、右产物、四维打分 + needs_manual；
-页内打完后可一键导出 `annotations_filled.csv`。
+页内打完后可一键导出打分明细（文件名由 `--export-name` 指定）。
 
 空产物区分两类：
 - `needs_ocr`：无文本层（invisible_text_layer 等），原生解析为空属预期；
@@ -219,7 +219,7 @@ def _options() -> str:
 _TEMPLATE = """<!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
-<title>DataAgent 黄金集标注（60 页）</title>
+<title>DataAgent 黄金集标注（__COUNT__ 页）</title>
 <style>
   :root { color-scheme: light; }
   body { margin: 0; padding: 16px; background: #f6f7f9;
@@ -261,15 +261,15 @@ _TEMPLATE = """<!doctype html>
 <div class="bar">
   <h1>黄金集标注</h1>
   <span class="progress">已填 <b id="filled">0</b> / __COUNT__</span>
-  <button id="export">导出 annotations_filled.csv</button>
+  <button id="export">导出 __EXPORT_NAME__</button>
 </div>
 <div class="hint">
   对照左侧 PDF 页面图与右侧系统产物打分：四维各 0–3（3 最好，0 不可用），并标记是否需要人工介入。
   空产物页会显示状态：<b>needs_ocr</b> 表示无文本层（需 OCR）；
   <b>suspected_garbled</b> 表示引擎判定疑似乱码，
   右侧回退展示原生文本项。打分自动保存在本浏览器；完成后点“导出”，把文件放到
-  <code>var/golden/annotations_filled.csv</code>，
-  然后运行 <code>python tests/eval/import_annotations.py</code>。
+  <code>var/golden/__EXPORT_NAME__</code>，
+  然后运行 <code>python tests/eval/import_annotations.py --filled var/golden/__EXPORT_NAME__</code>。
 </div>
 <details class="rubric">
   <summary>评分标准（点击展开）：四维边界与 0–3 锚点</summary>
