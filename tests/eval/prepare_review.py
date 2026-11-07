@@ -269,7 +269,9 @@ _TEMPLATE = """<!doctype html>
   <b>suspected_garbled</b> 表示引擎判定疑似乱码，
   右侧回退展示原生文本项。打分自动保存在本浏览器；完成后点“导出”，把文件放到
   <code>var/golden/__EXPORT_NAME__</code>，
-  然后运行 <code>python tests/eval/import_annotations.py --filled var/golden/__EXPORT_NAME__</code>。
+  然后运行
+  <code>python tests/eval/import_annotations.py --filled
+  var/golden/__EXPORT_NAME__</code>。
 </div>
 <details class="rubric">
   <summary>评分标准（点击展开）：四维边界与 0–3 锚点</summary>
