@@ -86,6 +86,8 @@
   - 因此表格页与缺口页的分数必须按最终产物重评；文本类未变化页无需重打。
 - 查看器路径：
   - 第一批最终产物：`var/golden/review_final/index.html`（`parsed_final/`，导出 `annotations_filled_final.csv`）
+  - 第一批**只重评变化页**：`var/golden/review_rescore/index.html`（29 页，
+    `human_sheet_rescore.csv`，导出 `annotations_filled_rescore.csv`）
   - 第二批最终产物：`var/golden/review_v2/index.html`（`parsed_v2/`，导出 `annotations_filled_v2.csv`）
   - 旧 `review/` 与 `parsed/` 保留为原始抽取基线，不再用于验收。
 

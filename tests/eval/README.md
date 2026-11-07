@@ -24,6 +24,11 @@
   --sheet var/golden/human_sheet.csv --out var/golden/review_final \
   --parsed var/golden/parsed_final --export-name annotations_filled_final.csv
 
+# 只重评第一批中产物发生变化的 29 页（表格页 + 缺口页 + 文本微调）
+.venv/Scripts/python.exe tests/eval/prepare_review.py \
+  --sheet var/golden/human_sheet_rescore.csv --out var/golden/review_rescore \
+  --parsed var/golden/parsed_rescore --export-name annotations_filled_rescore.csv
+
 # 增量批次（A 路径）：从剩余真实页面按分类别风险优先选页（最多 60；
 # 跨页表真实样本不足时少于 60），生成 review_v2
 .venv/Scripts/python.exe tests/eval/annotations_template_v2.py

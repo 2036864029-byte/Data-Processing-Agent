@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -63,6 +64,25 @@ def calibrate() -> dict[str, Any]:
             "labeled": len(records),
             "required": 12,
             "note": "请先完成 human_sheet.csv 的人工四维打分并回填 annotations.csv",
+        }
+        write_json(GOLDEN_ROOT / "calibration_report.json", report)
+        return report
+
+    stale = [
+        record["sample_id"]
+        for record in records
+        if record.get("provenance") != "valid"
+    ]
+    if stale:
+        report = {
+            "status": "stale_labels",
+            "labeled": len(records),
+            "valid": len(records) - len(stale),
+            "stale": stale,
+            "note": (
+                "部分标签对应的产物已变化（或缺少 artifact_hash）；"
+                "请用最终产物查看器重评这些页后再标定"
+            ),
         }
         write_json(GOLDEN_ROOT / "calibration_report.json", report)
         return report
@@ -145,6 +165,7 @@ def _record(
         "target": sum(int(value) for value in dims) / 12,
         "needs_manual": needs_manual in _TRUE,
         "features": _features(markdown, scanned=scanned),
+        "provenance": _provenance(row, markdown),
     }
 
 
@@ -166,8 +187,28 @@ def _features(markdown: str, *, scanned: bool) -> dict[str, float]:
 
 
 def _read_markdown(sample_id: str) -> str:
-    path = GOLDEN_ROOT / "parsed" / f"{sample_id}.md"
-    return path.read_text(encoding="utf-8") if path.is_file() else ""
+    """优先读最终交付产物；旧的原始抽取仅作回退（两批未变化页内容一致）。"""
+    for root in (GOLDEN_ROOT / "parsed_final", GOLDEN_ROOT / "parsed"):
+        path = root / f"{sample_id}.md"
+        if path.is_file():
+            return path.read_text(encoding="utf-8")
+    return ""
+
+
+def _markdown_hash(markdown: str) -> str:
+    return hashlib.sha256(markdown.encode("utf-8")).hexdigest()[:16]
+
+
+def _provenance(row: dict[str, str], markdown: str) -> str:
+    """标签是否对应当前展示的产物；旧标签在产物未变化时仍有效。"""
+    recorded = row.get("artifact_hash", "").strip()
+    if recorded:
+        return "valid" if recorded == _markdown_hash(markdown) else "stale"
+    raw_path = GOLDEN_ROOT / "parsed" / f"{row['sample_id']}.md"
+    if not raw_path.is_file():
+        return "stale"
+    raw = raw_path.read_text(encoding="utf-8")
+    return "valid" if raw.strip() == markdown.strip() else "stale"
 
 
 def _vector(record: dict[str, Any]) -> dict[str, float]:
