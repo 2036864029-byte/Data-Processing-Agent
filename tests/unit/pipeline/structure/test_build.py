@@ -444,3 +444,92 @@ def test_selected_grid_is_logically_merged(monkeypatch) -> None:
     assert len(tables) == 1
     assert tables[0].table is not None
     assert tables[0].table.grid.n_rows == 2
+
+
+def _grid(rows: list[list[str]], *, bbox: tuple[float, float, float, float]) -> TableGrid:
+    cells = [
+        TableCell(row=row_index, col=col_index, text=text)
+        for row_index, row in enumerate(rows)
+        for col_index, text in enumerate(row)
+        if text
+    ]
+    return TableGrid(
+        page_no=1,
+        bbox=bbox,
+        n_rows=len(rows),
+        n_cols=max(len(row) for row in rows),
+        header_rows=1,
+        cells=tuple(cells),
+        source_engine="pdf-inspector",
+        confidence=0.5,
+    )
+
+
+def test_page_header_plus_prose_body_is_demoted() -> None:
+    body = ("谈判和询价工作。第三十条采购方案。" * 60)[:864]
+    grid = _grid(
+        [["2026/7/28 20:54", "", "", "", "", "_", ""], ["", "", body, "", "", "", ""]],
+        bbox=(0.0, 0.0, 100.0, 100.0),
+    )
+    slot = build_module.TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
+
+    assert build_module._is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
+
+
+def test_multi_row_prose_cells_are_demoted() -> None:
+    grid = _grid(
+        [
+            ["答：成交供应商将被责令限期改正，情节严重的，列入不良行为记录", "1", "3"],
+            [
+                "采购代理机构应在评标结束后几个工作日内报送？",
+                "供应商应在接到通知后的规定期限内完成整改并提交整改报告。",
+                "禁止参加政府采购活动并在指定媒体上予以通报处理。",
+            ],
+        ],
+        bbox=(0.0, 0.0, 100.0, 100.0),
+    )
+    slot = build_module.TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
+
+    assert build_module._is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
+
+
+def test_prose_cells_in_small_table_are_not_demoted() -> None:
+    grid = _grid(
+        [
+            ["答：成交供应商将被责令限期改正，情节严重的，列入不良行为记录", "1", "3"],
+            ["采购人？", "供应商应在规定期限内整改。", "禁止参加政府采购活动。"],
+        ],
+        bbox=(0.0, 0.0, 50.0, 50.0),
+    )
+    slot = build_module.TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
+
+    assert not build_module._is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
+
+
+def test_inline_numbers_attach_to_the_x_gap_line() -> None:
+    items = [
+        item("的高影响天气以致发生公共安全责任事件，造", 76.99, 284.25, width=450.0),
+        item("21", 91.99, 277.5, width=16.35),
+        item("8", 228.37, 277.5, width=8.18),
+        item("成", 76.99, 262.5, width=15.0),
+        item("名参赛选手死亡，", 108.37, 262.5, width=120.0),
+        item("人受伤。", 236.56, 262.5, width=60.0),
+    ]
+
+    lines = build_module._cluster_lines(items)
+
+    assert any(
+        line.text.endswith("成21名参赛选手死亡，8人受伤。") for line in lines
+    )
+
+
+def test_inline_number_attaches_to_answer_line() -> None:
+    items = [
+        item("答：（", 76.99, 645.0, width=37.5),
+        item("）最低投标价法", 122.68, 645.0, width=397.5),
+        item("1", 114.49, 660.0, width=8.18),
+    ]
+
+    lines = build_module._cluster_lines(items)
+
+    assert any("答：（1）最低投标价法" in line.text for line in lines)

@@ -68,6 +68,24 @@
 - 标注完成后合并：`import_annotations.py --filled var/golden/annotations_filled_v2.csv`，
   再运行 `calibrate.py` / `qc_gate_report.py` 复核门禁。
 
+## 三页缺陷根因与修复（2026-11-07）
+
+| 样本 | 现象 | 根因 | 修复后 |
+| ---- | ---- | ---- | ---- |
+| R-0033 | 整页正文被识别成 2×7 表 | L0 pdf-inspector 把页眉 + 正文识别成表；旧降级只在“无坐标项”时执行，有坐标项的页面直接跳过；且只看首行 | 0 表，正文恢复 |
+| R-0036 | 页图纯文本，却生成 4×3 表 | 同上；首行无句末标点、单元格 30/23/21 字，旧判据漏判 | 0 表，`答：（1）…（6）` 正确 |
+| R-0023 | `1 答：（）`、`造 21 8 成…` | `1`/`21`/`8` 是带基线偏移的独立文本项；文本页默认不探坐标项，直接使用 pdf-inspector Markdown（内容流顺序已错） | `答：（1）`、`造成21名…8人受伤`；段落仍偏碎 |
+
+- 新判据：表格 bbox 覆盖页面 ≥60%，且 ≥2 个带句末标点的散文单元格，
+  或任一 ≥120 字散文单元格；对所有来源为 `markdown` 的槽位生效，不再区分有无坐标项。
+- 行重排：短数字按“落在哪一行的列间隙”回挂；文本页出现
+  `number 答：空括号` 或连续数字串时按需补探坐标项（`position_probe_triggered`）。
+- 观测事件：`table_route_summary`（L0/L1/ruled 数量与拒绝原因）、
+  `table_routed`（source/reason/rows/cols/fill/bbox）、
+  `table_l0_prose_demoted`、`position_probe_triggered`。
+- 已知残留：R-0023 的段落切分偏碎（`1-59`、`案例`、`2021` 各自成段）；
+  R-0033 页眉/页脚仍与正文合并，属段落/页眉处理调优，不影响本轮数字与表格正确性。
+
 ## 标注对象错位与修正（2026-11-07）
 
 - 原查看器右侧调用 `pdf_inspector.extract_pages_markdown`，展示的是优化前的原始 Markdown；

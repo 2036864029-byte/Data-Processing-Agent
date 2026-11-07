@@ -35,6 +35,7 @@ from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.table.markdown import markdown_table_spans, markdown_tables
 from dataagent.pipeline.table.router import TableRouting, route_tables
 from dataagent.pipeline.table.rowmerge import merge_logical_rows
+from dataagent.platform.observe.log import log_event
 
 LINE_TOLERANCE_RATIO: Final[float] = 0.6
 PARAGRAPH_SHORT_RATIO: Final[float] = 0.85
@@ -44,7 +45,8 @@ SLOT_OVERLAP_RATIO: Final[float] = 0.15
 CAPTION_MAX_CHARS: Final[int] = 60
 CAPTION_SEARCH_DEPTH: Final[int] = 3
 PROSE_CELL_MIN_CHARS: Final[int] = 120
-PROSE_ROW_MIN_CHARS: Final[int] = 240
+PROSE_CELL_SHORT_MIN_CHARS: Final[int] = 20
+PROSE_TABLE_AREA_RATIO: Final[float] = 0.6
 RUNNING_HEADER_MIN_PAGES: Final[int] = 3
 SENTENCE_END: Final[str] = "。！？；：!?;:"
 _HEADING_RE: Final[re.Pattern[str]] = re.compile(r"^(#{1,6})\s+(.*)$")
@@ -219,19 +221,25 @@ def _build_slots(
     slots = [
         replace(slot, grid=merge_logical_rows(slot.grid)) for slot in slots
     ]
-    if not has_items:
-        kept: list[TableSlot] = []
-        for slot in slots:
-            if slot.span is not None and _is_prose_table(slot):
-                demoted.append(slot.span)
-            else:
-                kept.append(slot)
-        slots = kept
+    # 有坐标项时同样要拦 L0 伪表格：否则整页正文会被假表吞掉，
+    # 坐标项也不会再进入文本块（R-0033 / R-0036 实测）。
+    kept: list[TableSlot] = []
+    for slot in slots:
+        if slot.span is not None and _is_prose_table(slot, page_bbox):
+            demoted.append(slot.span)
+        else:
+            kept.append(slot)
+    slots = kept
     warnings: list[str] = []
     if has_items and any(not slot.trusted_bbox for slot in slots):
         warnings.append(f"table_bbox_untrusted:{page_no}")
     if demoted:
         warnings.append(f"table_l0_prose_demoted:{page_no}")
+        log_event(
+            "table_l0_prose_demoted",
+            page_no=page_no,
+            spans=len(demoted),
+        )
     return slots, demoted, warnings
 
 
@@ -513,7 +521,90 @@ def _cluster_lines(items: Sequence[PositionedText]) -> list[_Line]:
                 x1=item.x + item.width,
             )
         )
-    return lines
+    return _attach_inline_numbers(lines)
+
+
+_NUMERIC_TOKEN = re.compile(r"^\d{1,3}$")
+_INLINE_LINE_RANGE = 1.6
+_INLINE_GAP_TOLERANCE = 1.5
+
+
+def _attach_inline_numbers(lines: list[_Line]) -> list[_Line]:
+    """把带基线偏移的短数字挂回 x 间隙所在的行。
+
+    PDF 常把 `(1)`、`21`、`8` 等数字作为独立文本项，其 y 中心与正文行
+    相差几磅；按中心距离聚类会把它们拆成单独一行，导致
+    `1 答：（）` / `造 21 8 成名…` 这类错位。这里按“数字 x 落在哪一行的
+    列间隙里”重新归属，再交给 `_Line.text` 按 x 排序。
+    """
+    tokens: list[PositionedText] = []
+    kept: list[_Line] = []
+    for line in lines:
+        regular = [
+            item for item in line.items if not _NUMERIC_TOKEN.match(item.text.strip())
+        ]
+        tokens.extend(
+            item for item in line.items if _NUMERIC_TOKEN.match(item.text.strip())
+        )
+        if not regular:
+            continue
+        line.items = regular
+        line.x0 = min(item.x for item in regular)
+        line.x1 = max(item.x + item.width for item in regular)
+        kept.append(line)
+
+    for token in tokens:
+        token_center = token.y + token.height / 2
+        best: tuple[float, float, _Line] | None = None
+        for line in kept:
+            if (
+                abs(line.center - token_center)
+                > max(line.height, token.height) * _INLINE_LINE_RANGE
+            ):
+                continue
+            gap = _gap_distance(line, token)
+            if gap is None:
+                continue
+            candidate = (gap, abs(line.center - token_center), line)
+            if best is None or candidate[:2] < best[:2]:
+                best = candidate
+        if best is None:
+            kept.append(
+                _Line(
+                    center=token_center,
+                    height=token.height,
+                    items=[token],
+                    x0=token.x,
+                    x1=token.x + token.width,
+                )
+            )
+            continue
+        line = best[2]
+        line.items.append(token)
+        line.x0 = min(line.x0, token.x)
+        line.x1 = max(line.x1, token.x + token.width)
+        line.height = max(line.height, token.height)
+    return kept
+
+
+def _gap_distance(line: _Line, token: PositionedText) -> float | None:
+    """数字 x 落在某行相邻文本项的间隙内时返回距离，否则 None。"""
+    spans = sorted(
+        (item.x, item.x + item.width)
+        for item in line.items
+        if item is not token
+    )
+    if not spans:
+        return None
+    x = token.x
+    if x <= spans[0][0] + _INLINE_GAP_TOLERANCE:
+        return max(0.0, spans[0][0] - x)
+    for left, right in zip(spans, spans[1:], strict=False):
+        if left[1] - _INLINE_GAP_TOLERANCE <= x <= right[0] + _INLINE_GAP_TOLERANCE:
+            return 0.0
+    if x >= spans[-1][1] - _INLINE_GAP_TOLERANCE:
+        return max(0.0, x - spans[-1][1])
+    return None
 
 
 def _line_captions(
@@ -644,20 +735,35 @@ def _is_caption(text: str) -> bool:
     return _CAPTION_RE.search(stripped) is not None
 
 
-def _is_prose_table(slot: TableSlot) -> bool:
-    """L0-only 表若首行是长句正文，视为 pdf-inspector 伪表格。"""
+def _is_prose_table(slot: TableSlot, page_bbox: BBox) -> bool:
+    """L0 表若整体像正文而不是行列结构，视为 pdf-inspector 伪表格。
+
+    旧逻辑只看首行，且不要求表格覆盖页面大部分区域；实测会把
+    “页眉 + 整页正文”或多行问答误判成表（R-0033 / R-0036）。
+    新逻辑：表格 bbox 覆盖页面 ≥60%，且出现 ≥2 个带句末标点的散文单元格，
+    或任一 ≥120 字的散文单元格。
+    """
     if slot.source != "markdown":
         return False
-    first_row = [cell for cell in slot.grid.cells if cell.row == 0]
-    if not first_row:
+    grid = slot.grid
+    page_area = _area(page_bbox)
+    if page_area <= 0:
         return False
-    joined = "".join(cell.text for cell in first_row)
-    if not any(mark in joined for mark in SENTENCE_END):
+    if _area(grid.bbox) / page_area < PROSE_TABLE_AREA_RATIO:
         return False
-    return (
-        any(len(cell.text.strip()) >= PROSE_CELL_MIN_CHARS for cell in first_row)
-        or sum(len(cell.text.strip()) for cell in first_row) >= PROSE_ROW_MIN_CHARS
-    )
+    prose_cells = [
+        cell
+        for cell in grid.cells
+        if len(cell.text.strip()) >= PROSE_CELL_SHORT_MIN_CHARS
+        and any(mark in cell.text for mark in SENTENCE_END)
+    ]
+    if any(
+        len(cell.text.strip()) >= PROSE_CELL_MIN_CHARS
+        and any(mark in cell.text for mark in SENTENCE_END)
+        for cell in grid.cells
+    ):
+        return True
+    return len(prose_cells) >= 2
 
 
 def _demoted_text(lines: Sequence[str]) -> list[str]:

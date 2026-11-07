@@ -9,10 +9,12 @@ from dataagent.contracts.artifacts import ExtractionResult, PageArtifact
 from dataagent.contracts.plugin import PluginContext
 from dataagent.kernel.registry import PluginRegistry
 from dataagent.pipeline.profile.writer import PageProfileWriter
+from dataagent.pipeline.quality.numbering import needs_position_probe
 from dataagent.pipeline.sniff.sniffer import Family
 from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.task.context import DocumentContext
+from dataagent.platform.observe.log import log_event
 from dataagent.platform.plugins.adapters.layout_probe import ProbedLayout, probe_layout
 
 EXTRACT_CAPABILITIES: Final[Mapping[Family, str]] = {
@@ -74,10 +76,25 @@ class ExtractionService:
         page_set = set(pages)
         item_pages = sorted(page_set & set(extraction.pages_with_tables))
         context.table_pages.update(item_pages)
+        markdown_by_page = {
+            artifact.page_no: artifact.markdown for artifact in extraction.pages
+        }
+        suspicious = sorted(
+            page
+            for page in page_set - set(item_pages)
+            if needs_position_probe(markdown_by_page.get(page, ""))
+        )
+        if suspicious:
+            log_event(
+                "position_probe_triggered",
+                pages=suspicious,
+                reason="number_order",
+            )
+        probe_pages = sorted(set(item_pages) | set(suspicious))
         try:
             probed = self._layout_probe(
                 str(context.path),
-                item_pages=item_pages,
+                item_pages=probe_pages,
                 role_pages=sorted(page_set),
             )
         except Exception:

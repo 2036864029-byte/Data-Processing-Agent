@@ -20,6 +20,7 @@ from dataagent.pipeline.table.geometry import (
 )
 from dataagent.pipeline.table.markdown import markdown_tables
 from dataagent.pipeline.table.quality import GridQuality, grid_quality
+from dataagent.platform.observe.log import log_event
 
 SELECTION_MARGIN = 0.05
 PAIR_MIN_OVERLAP = 0.15
@@ -165,13 +166,45 @@ def route_tables(
                 quality=grid_quality(grid),
             )
         )
-    return TableRouting(
+    routing = TableRouting(
         tables=tuple(choices),
         markdown_count=len(l0),
         geometry_count=len(l1_pairs),
         ruled_count=len(ruled_tables),
         rejected_ruled=tuple(rejected_ruled),
     )
+    _log_routing(page_no, routing)
+    return routing
+
+
+def _log_routing(page_no: int, routing: TableRouting) -> None:
+    if not (
+        routing.markdown_count
+        or routing.geometry_count
+        or routing.ruled_count
+    ):
+        return
+    log_event(
+        "table_route_summary",
+        page_no=page_no,
+        l0=routing.markdown_count,
+        l1=routing.geometry_count,
+        ruled=routing.ruled_count,
+        chosen=len(routing.tables),
+        rejected=list(routing.rejected_ruled),
+    )
+    for choice in routing.tables:
+        log_event(
+            "table_routed",
+            page_no=page_no,
+            source=choice.source,
+            reason=choice.reason,
+            rows=choice.grid.n_rows,
+            cols=choice.grid.n_cols,
+            cell_fill=choice.quality.cell_fill,
+            score=choice.quality.score,
+            bbox=[round(value, 1) for value in choice.grid.bbox],
+        )
 
 
 def _reference_for(

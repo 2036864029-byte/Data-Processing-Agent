@@ -223,3 +223,34 @@ def test_accepted_ruled_suppresses_only_duplicate_l0_tables() -> None:
         choice for choice in routing.tables if choice.source == "markdown"
     )
     assert {cell.text for cell in remaining.grid.cells} == {"c", "d", "3", "4"}
+
+
+def test_route_logs_structured_events() -> None:
+    import io
+    import json
+    import logging
+
+    from dataagent.platform.observe.log import configure_logging
+
+    logger = logging.getLogger("dataagent")
+    previous_handlers = list(logger.handlers)
+    previous_level = logger.level
+    previous_propagate = logger.propagate
+    previous_disabled = logger.disabled
+    buffer = io.StringIO()
+    configure_logging(stream=buffer)
+    try:
+        route_tables(good_markdown(), [], page_no=7)
+    finally:
+        logger.handlers.clear()
+        logger.handlers.extend(previous_handlers)
+        logger.setLevel(previous_level)
+        logger.propagate = previous_propagate
+        logger.disabled = previous_disabled
+
+    events = [json.loads(line) for line in buffer.getvalue().splitlines()]
+    names = {event["event"] for event in events}
+    assert {"table_route_summary", "table_routed"} <= names
+    routed = next(event for event in events if event["event"] == "table_routed")
+    assert routed["page_no"] == 7
+    assert routed["source"] == "markdown"
