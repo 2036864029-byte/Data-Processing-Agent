@@ -96,15 +96,14 @@
 - 修复：`prepare_review.py` 现在按文件跑当前流水线（处理窗口含相邻页，用于跨页表衔接），
   按页取最终 Markdown / 结构 JSON；右侧改为“最终产物（HTML 渲染）/ Markdown 源码 / JSON”
   三视图；缺口页显示交付占位；每页记录 `artifact_hash` 并写入导出 CSV。
-- 第一批新旧对照（`parsed/` vs `parsed_final/`）：
-  - **31/60 完全一致**，旧标签可沿用；
-  - **29 页有差异**：21 页新增 HTML 表（全部单表/跨页表页 + R-0033）、
-    6 页最终交付为缺口占位（R-0077/R-0098/R-0102 多栏、R-0139/R-0140 扫描、R-0162 编码损坏）、
-    R-0023/R-0107 文本小幅变化。
-  - 因此表格页与缺口页的分数必须按最终产物重评；文本类未变化页无需重打。
+- 第一批新旧对照（缺陷修复后重新生成）：
+  - **29/60 完全一致**，旧标签可沿用；
+  - **31 页有差异**：单表 10、跨页表 10、多栏 5、纯文本 3、扫描 2、编码损坏 1
+    （含 6 个最终交付为缺口占位、R-0023/R-0033 数字与伪表修复）。
+  - 因此这 31 页的分数必须按最终产物重评；未变化页无需重打。
 - 查看器路径：
   - 第一批最终产物：`var/golden/review_final/index.html`（`parsed_final/`，导出 `annotations_filled_final.csv`）
-  - 第一批**只重评变化页**：`var/golden/review_rescore/index.html`（29 页，
+  - 第一批**只重评变化页**：`var/golden/review_rescore/index.html`（31 页，
     `human_sheet_rescore.csv`，导出 `annotations_filled_rescore.csv`）
   - 第二批最终产物：`var/golden/review_v2/index.html`（`parsed_v2/`，导出 `annotations_filled_v2.csv`）
   - 旧 `review/` 与 `parsed/` 保留为原始抽取基线，不再用于验收。

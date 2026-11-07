@@ -352,7 +352,15 @@ def _render_html(
     entries: list[dict[str, Any]], *, export_name: str = "annotations_filled.csv"
 ) -> str:
     cards = "\n".join(_card(entry) for entry in entries)
-    state_key = "dataagent_golden_scores_" + re.sub(r"\W+", "_", export_name)
+    digest = hashlib.sha256(
+        "".join(entry.get("artifact_hash", "") for entry in entries).encode("utf-8")
+    ).hexdigest()[:8]
+    state_key = (
+        "dataagent_golden_scores_"
+        + re.sub(r"\W+", "_", export_name)
+        + "_"
+        + digest
+    )
     return (
         _TEMPLATE.replace("__CARDS__", cards)
         .replace("__COUNT__", str(len(entries)))

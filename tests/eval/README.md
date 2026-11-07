@@ -24,7 +24,7 @@
   --sheet var/golden/human_sheet.csv --out var/golden/review_final \
   --parsed var/golden/parsed_final --export-name annotations_filled_final.csv
 
-# 只重评第一批中产物发生变化的 29 页（表格页 + 缺口页 + 文本微调）
+# 只重评第一批中产物发生变化的页（当前 31 页：表格 + 缺口 + 数字修复页）
 .venv/Scripts/python.exe tests/eval/prepare_review.py \
   --sheet var/golden/human_sheet_rescore.csv --out var/golden/review_rescore \
   --parsed var/golden/parsed_rescore --export-name annotations_filled_rescore.csv
