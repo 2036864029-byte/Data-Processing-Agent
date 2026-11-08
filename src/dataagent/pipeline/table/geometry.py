@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from dataagent.contracts.table import TableCell, TableGrid
-from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
+from dataagent.pipeline.quality.normalization import normalize_cell
 
 ROW_TOLERANCE_RATIO = 1.0
 CELL_GAP_TOLERANCE = 3.0
@@ -60,7 +60,7 @@ class _CellGroup:
     @property
     def text(self) -> str:
         joined = "".join(item.text for item in self.items)
-        return normalize_cjk_text(joined).strip()
+        return normalize_cell(joined).strip()
 
 
 @dataclass

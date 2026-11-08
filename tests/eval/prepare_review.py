@@ -26,8 +26,7 @@ from _lib import GOLDEN_ROOT, read_csv, read_json, write_json
 
 from dataagent.contracts.structure import DocumentStructure
 from dataagent.pipeline.output.structure_view import to_markdown_view
-from dataagent.pipeline.quality.numbering import repair_numbering
-from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
+from dataagent.pipeline.quality.normalization import normalize_text
 from dataagent.pipeline.task.factory import create_builtin_runner
 from dataagent.platform.plugins.adapters.text_layer import probe_text_layer
 
@@ -252,7 +251,7 @@ def prepare(
                     + (f" {banner}" if banner else "")
                 )
         else:
-            display = repair_numbering(normalize_cjk_text(fallback_display))
+            display = normalize_text(fallback_display)
             artifact_source = "raw"
             error = artifact.get("error")
             if error:

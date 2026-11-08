@@ -26,9 +26,9 @@ from dataagent.contracts.headings import (
 )
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.merge.merger import MergedDocument, MergedPage
-from dataagent.pipeline.quality.text_normalize import (
-    normalize_cjk_text,
+from dataagent.pipeline.quality.normalization import (
     normalize_table_grid,
+    normalize_text,
 )
 from dataagent.pipeline.structure.crosspage import merge_cross_page_tables
 from dataagent.pipeline.structure.models import (
@@ -728,7 +728,7 @@ def _median_width(lines: Sequence[_Line]) -> float:
 def _join_lines(texts: Sequence[str]) -> str:
     result = ""
     for text in texts:
-        piece = normalize_cjk_text(text).strip()
+        piece = normalize_text(text).strip()
         if not piece:
             continue
         if result and _needs_space(result[-1], piece[0]):

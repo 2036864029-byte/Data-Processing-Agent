@@ -9,7 +9,7 @@ import re
 from typing import Final
 
 from dataagent.contracts.table import TableCell, TableGrid
-from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
+from dataagent.pipeline.quality.normalization import normalize_cell
 
 _SEPARATOR_CELL: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
 
@@ -32,7 +32,7 @@ def markdown_tables(
         cells: list[TableCell] = []
         for row_index, row in enumerate([header, *rows]):
             for col_index, text in enumerate(row):
-                value = normalize_cjk_text(text).strip()
+                value = normalize_cell(text).strip()
                 if value:
                     cells.append(
                         TableCell(

@@ -18,9 +18,8 @@ from dataagent.pipeline.quality.l1_check import (
     L1PageInput,
     defects_for_repair,
 )
-from dataagent.pipeline.quality.numbering import repair_numbering
+from dataagent.pipeline.quality.normalization import normalize_text
 from dataagent.pipeline.quality.table_metrics import table_page_metrics
-from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
 from dataagent.pipeline.repair.fallback import resolve_fallback
 from dataagent.pipeline.repair.gap import PageGap, page_gap_from_outcome
 from dataagent.pipeline.repair.loop import (
@@ -97,7 +96,7 @@ class PageQualityService:
     ) -> None:
         page = artifact.page_no
         if context.routing.family is Family.PDF:
-            normalized = repair_numbering(normalize_cjk_text(artifact.markdown))
+            normalized = normalize_text(artifact.markdown)
             if normalized != artifact.markdown:
                 artifact = artifact.model_copy(update={"markdown": normalized})
                 context.artifacts[page] = artifact

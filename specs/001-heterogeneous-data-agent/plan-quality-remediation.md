@@ -2,7 +2,7 @@
 
 **日期**：2026-11-08
 **来源**：B9 标注审计（`docs/b9-calibration-diagnosis.md`）与表格/归一化代码审计
-**状态**：Phase 1–2 已完成（2026-11-08，见 §2 / §3 实施结果）；Phase 3–7 待实施
+**状态**：Phase 1–3 已完成（2026-11-08，见各 Phase 实施结果）；Phase 4–7 待实施
 **原则**：每个 Phase 独立可交付；先测试后改；全量门禁保持绿；阈值集中、不新增散落常量；
 单文件 ≤500 行；所有修复可回滚（按 Phase 单独提交）。
 
@@ -174,6 +174,23 @@
 - 三条路径用同一组 fixture（含 R-0023、R-0041、R-0036）产出相同文本；
 - 幂等测试；编号修复不误改英文 `(2)`、不误改表格；
 - 全量门禁。
+
+**实施结果（2026-11-08）**
+
+- 入口落在 `pipeline/quality/normalization.py`：`normalize_text` / `normalize_cell` /
+  `normalize_table_grid`。机制仍在 `text_normalize`（整形）与 `numbering`（编号），
+  本模块只定义“哪条路径用哪套口径”，避免各调用方自行组合。
+- 统一口径：`build.py::_join_lines` 接入编号修复（此前坐标路径缺这一步）；
+  `table/geometry.py`、`table/markdown.py` 的单元格改走 `normalize_cell`
+  （不再套用正文硬换行规则）；`task/quality.py`、`tests/eval/prepare_review.py`
+  改走 `normalize_text`。全仓已无绕过入口的直接组合。
+- **幂等缺陷与修复**：单一顺序 `repair(normalize(x))` 不幂等——编号修复会制造新的
+  CJK 相邻空白（`0()\t中` → `（0）\t中` → 再归一 → `（0）中`）。改为
+  `normalize_text` 最多 4 轮收敛到不动点；性质测试（Hypothesis 200 例）通过。
+- 观测 warnings 顺延到 Phase 6：`normalization_applied` 事件在那里定义，
+  届时由调用方 before/after 对比得出 kind 与 changed，避免现在发明半成品 API。
+- 验收：R-0023 真实页 `答：（1）`、无 `1 答：`、`造成21名`、`8人受伤`、
+  标题 `## 198.` / `## 199.`、二次归一幂等；全量 1012 测试与门禁通过。
 
 ## 5. Phase 4：表格策略与缺口误判（P0/P1）
 

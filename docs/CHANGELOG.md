@@ -10,6 +10,21 @@
 
 ## [未发布]
 
+### 统一归一化入口（质量修复 Phase 3，2026-11-08）
+
+- 新增 `pipeline/quality/normalization.py` 三个公共入口：
+  `normalize_text`（正文 / Markdown：编号修复 + 伪空格 + 硬换行回流）、
+  `normalize_cell`（单元格）、`normalize_table_grid`（整张网格）。
+  机制仍在 `text_normalize` / `numbering`，本模块只定义口径。
+- **口径统一**：坐标建块路径 `_join_lines` 过去只做伪空格、不做编号修复，
+  现与 Markdown 路径一致（`1 答：（）` → `答：（1）`）；
+  `task/quality.py`、`table/geometry.py`、`table/markdown.py`、
+  `tests/eval/prepare_review.py` 全部改为只调用统一入口。
+- **幂等修复**：编号修复与去伪空格会互相触发（`0()\t中` → `（0）\t中` →
+  `（0）中`），单一顺序不幂等；正文入口改为最多 4 轮收敛到不动点。
+- 验收：R-0023 真实页 `答：（1）`、无 `1 答：`、`造成21名`、`8人受伤`，
+  标题 `## 198.` / `## 199.`，二次归一幂等；性质测试 200 例通过。
+
 ### 表格单元格归一化（质量修复 Phase 2，2026-11-08）
 
 - 新增 `normalize_cell_text` / `normalize_table_grid`
