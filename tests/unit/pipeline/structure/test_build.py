@@ -60,6 +60,25 @@ def table_items() -> list[PositionedText]:
     ]
 
 
+def test_table_cells_are_normalized_without_structure_change() -> None:
+    markdown = "| 项 目 | 金 额 |\n| --- | --- |\n| 合 计 | 100 |\n"
+
+    result = build_page_blocks(
+        page_no=1, markdown=markdown, layout=PageLayout(page_no=1)
+    )
+
+    table = next(block for block in result.page.blocks if block.kind == "table")
+    assert table.table is not None
+    grid = table.table.grid
+    assert [(cell.row, cell.col, cell.text) for cell in grid.cells] == [
+        (0, 0, "项目"),
+        (0, 1, "金额"),
+        (1, 0, "合计"),
+        (1, 1, "100"),
+    ]
+    assert (grid.n_rows, grid.n_cols, grid.header_rows) == (2, 2, 1)
+
+
 def test_markdown_path_builds_heading_paragraph_and_table() -> None:
     result = build_page_blocks(
         page_no=1,

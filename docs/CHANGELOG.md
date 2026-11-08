@@ -10,6 +10,19 @@
 
 ## [未发布]
 
+### 表格单元格归一化（质量修复 Phase 2，2026-11-08）
+
+- 新增 `normalize_cell_text` / `normalize_table_grid`
+  （`pipeline/quality/text_normalize.py`）：删除单元格内 CJK 伪空格（含全角空格），
+  行内折行按语义回流；句末标点后、编号起始行前、纯数字/拉丁多行之间保持独立；
+  跨单元格不合并、幂等。
+- 建块在 `merge_logical_rows` **之前**统一归一化每个表格槽位，使 Markdown /
+  JSON / tables.json / rows_text / HTML 同源；只改单元格文本，
+  行列数、rowspan/colspan、bbox 不变。
+- 实测茅台 2024 年报 p1–40：50 张表结构不变；多行单元格 250 → 38
+  （212 处行内折行回流，38 处为语义换行与 rowmerge 逻辑行边界）；
+  单元格总字数 14884 → 14585（折行换行符与行内填充空格）。
+
 ### 标题层级统一（质量修复 Phase 1，2026-11-08）
 
 - **单一规则源**：新增 `contracts/headings.py`（中文编号 → 层级、H1–H6 角色 → 层级）。

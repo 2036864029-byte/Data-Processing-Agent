@@ -16,6 +16,7 @@ from dataagent.pipeline.merge.merger import (
     MergedPage,
     ValidationResult,
 )
+from dataagent.pipeline.quality.text_normalize import normalize_table_grid
 from dataagent.pipeline.structure.build import build_document_blocks, build_page_blocks
 from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.structure.render import render_document_markdown
@@ -83,7 +84,7 @@ def test_selected_tables_match_router(page: int) -> None:
     )
 
     expected = sorted(
-        signature(merge_logical_rows(choice.grid))
+        signature(merge_logical_rows(normalize_table_grid(choice.grid)))
         for choice in routing.tables
     )
     actual = sorted(
@@ -129,18 +130,18 @@ def test_p25_personnel_table_is_logically_merged() -> None:
     names = [cell.text for cell in grid.cells if cell.col == 0 and cell.row > 0]
     assert names == [
         "张德芹",
-        "王 莉",
+        "王莉",
         "郭田勇",
         "盛雷鸣",
-        "王 鑫",
+        "王鑫",
         "刘世仲",
-        "韦 芳",
+        "韦芳",
         "游亚林",
         "郑尚勋",
-        "闻 勇",
+        "闻勇",
         "钟正强",
-        "蒋 焰",
-        "向 平",
+        "蒋焰",
+        "向平",
     ]
     merged = {(cell.row, cell.col): cell.text for cell in grid.cells}
     assert merged[(1, 1)] == "党委书记\n董事长、董事"

@@ -26,7 +26,10 @@ from dataagent.contracts.headings import (
 )
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.merge.merger import MergedDocument, MergedPage
-from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
+from dataagent.pipeline.quality.text_normalize import (
+    normalize_cjk_text,
+    normalize_table_grid,
+)
 from dataagent.pipeline.structure.crosspage import merge_cross_page_tables
 from dataagent.pipeline.structure.models import (
     BBox,
@@ -226,8 +229,11 @@ def _build_slots(
             )
         )
     demoted: list[tuple[int, int]] = []
+    # 先做单元格文本归一，再做逻辑行合并：合并会把逻辑行用 \n 拼进同一单元格，
+    # 之后再归一就会把逻辑行边界并掉。
     slots = [
-        replace(slot, grid=merge_logical_rows(slot.grid)) for slot in slots
+        replace(slot, grid=merge_logical_rows(normalize_table_grid(slot.grid)))
+        for slot in slots
     ]
     # 有坐标项时同样要拦 L0 伪表格：否则整页正文会被假表吞掉，
     # 坐标项也不会再进入文本块（R-0033 / R-0036 实测）。
