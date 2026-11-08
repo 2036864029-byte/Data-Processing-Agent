@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.table.prose import is_prose_cells
 
 _SEPARATOR_CELL: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
 _PIPE: Final[str] = "|"
@@ -118,9 +119,18 @@ def _matrix_col_occupancy(matrix: Sequence[Sequence[str]]) -> float:
     return filled / columns
 
 
-def table_page_metrics(markdown: str) -> TableMetrics | None:
-    """解析 Markdown 中的全部管道表；无表返回 None。"""
+def table_page_metrics(
+    markdown: str, *, skip_prose: bool = False
+) -> TableMetrics | None:
+    """解析 Markdown 中的全部管道表；无表返回 None。
+
+    `skip_prose=True` 时先剔除伪表格（页眉假表 / 整页正文被识别成表），
+    与建块阶段的降级判据同源（`pipeline.table.prose`）。L1 必须用它，
+    否则会出现“L1 说表结构坏、交付里却没有表”的假缺口（R-0002）。
+    """
     tables = _parse_tables(markdown)
+    if skip_prose:
+        tables = [table for table in tables if not _is_prose_table(table)]
     if not tables:
         return None
     fills: list[float] = []
@@ -141,6 +151,15 @@ def table_page_metrics(markdown: str) -> TableMetrics | None:
         header_ok=headers_ok,
         row_occupancy=min(row_occupancies),
         col_occupancy=min(col_occupancies),
+    )
+
+
+def _is_prose_table(
+    table: tuple[list[str], list[str], list[list[str]]],
+) -> bool:
+    header, _separator, rows = table
+    return is_prose_cells(
+        [*header, *(cell for row in rows for cell in row)]
     )
 
 

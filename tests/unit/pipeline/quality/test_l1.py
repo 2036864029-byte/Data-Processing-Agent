@@ -139,6 +139,48 @@ def test_table_page_uses_lower_density_threshold() -> None:
     )
 
 
+def test_text_based_density_threshold_is_calibrated() -> None:
+    """text_based 阈值 0.9：稀疏但有效页（R-0077 1.064）通过，近空白页拦住。"""
+    assert DefectCode.LOW_DENSITY not in codes(
+        page_input(metrics=healthy_metrics(char_density=0.95))
+    )
+    assert DefectCode.LOW_DENSITY in codes(
+        page_input(metrics=healthy_metrics(char_density=0.85))
+    )
+
+
+def test_mixed_density_threshold_is_calibrated() -> None:
+    """mixed 阈值 0.5：R-0098 0.726 / R-0102 0.87 通过。"""
+    assert DefectCode.LOW_DENSITY not in codes(
+        page_input(
+            pdf_type=PdfType.MIXED, metrics=healthy_metrics(char_density=0.6)
+        )
+    )
+    assert DefectCode.LOW_DENSITY in codes(
+        page_input(
+            pdf_type=PdfType.MIXED, metrics=healthy_metrics(char_density=0.45)
+        )
+    )
+
+
+def test_column_page_uses_lower_density_threshold() -> None:
+    assert DefectCode.LOW_DENSITY not in codes(
+        page_input(metrics=healthy_metrics(char_density=0.45), has_columns=True)
+    )
+    assert DefectCode.LOW_DENSITY in codes(
+        page_input(metrics=healthy_metrics(char_density=0.35), has_columns=True)
+    )
+
+
+def test_scanned_blank_page_still_fails() -> None:
+    """纯扫描页字符数为 0，必须继续命中（保留 needs_ocr 缺口）。"""
+    assert DefectCode.LOW_DENSITY in codes(
+        page_input(
+            pdf_type=PdfType.SCANNED, metrics=healthy_metrics(char_density=0.0)
+        )
+    )
+
+
 def test_reading_order_header_footer_and_rotation(  ) -> None:
     report = L1_CHECKER.check(
         page_input(

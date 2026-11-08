@@ -2,7 +2,7 @@
 
 **日期**：2026-11-08
 **来源**：B9 标注审计（`docs/b9-calibration-diagnosis.md`）与表格/归一化代码审计
-**状态**：Phase 1–3 已完成（2026-11-08，见各 Phase 实施结果）；Phase 4–7 待实施
+**状态**：Phase 1–3 与 Phase 4.1/4.2（P0）已完成（2026-11-08）；Phase 4.3/4.4（P1）与 Phase 5–7 待实施
 **原则**：每个 Phase 独立可交付；先测试后改；全量门禁保持绿；阈值集中、不新增散落常量；
 单文件 ≤500 行；所有修复可回滚（按 Phase 单独提交）。
 
@@ -243,6 +243,27 @@
 - 来源字符串改 `StrEnum`（`markdown/geometry/ruled`）。
 
 **验收**：默认值行为不变；单测覆盖策略注入；CHANGELOG 记录阈值来源。
+
+**实施结果（4.1 / 4.2，2026-11-08）**
+
+- 4.1 判据共用：新增 `pipeline/table/prose.py`（`SENTENCE_END` /
+  `PROSE_CELL_MIN_CHARS` / `PROSE_CELL_SHORT_MIN_CHARS` / `PROSE_TABLE_AREA_RATIO` /
+  `is_prose_cells`）；`build.py::_is_prose_table` 与
+  `table_metrics.table_page_metrics(skip_prose=True)` 共用。`task/quality.py`
+  的 L1 指标只统计真实表，`has_table` 由过滤结果决定，`has_columns` 取自
+  `extraction.pages_with_columns`。
+  与计划的差异：没有把 L1 改成“先跑表格路由再质检”（会把建块提前、放大文件打开次数），
+  而是抽出同一判据、两侧各自轻量判断一次。
+- 4.2 阈值：`CHAR_DENSITY_MIN_BY_TYPE` = 0.9 / 0.5 / 0.2 / 0.2，
+  新增 `COLUMN_PAGE_DENSITY_MIN = 0.4`；`_density_threshold()` 同时服务门控与
+  `extract_quality`，落地“按页型 + 表格/分栏的稀疏但有效”规则。
+  仍沿用配置项 `text_area_cm2 = 468`，未改成逐页实际版心：
+  L1 输入契约不含页尺寸，要加需修改 `PageArtifact` / 画像契约，留待后续。
+- `PageGap.evidence` 增加 `needs_ocr` 标识（`repair/gap.py`）。
+- 复核（逐页重放 L1）：R-0002 / R-0033 / R-0036 / R-0077 / R-0098 / R-0102 → pass；
+  R-0139 / R-0140 → `encoding_loss` + `low_density`，`needs_ocr=True`；
+  R-0162 → `low_density`（近空白，保持缺口）。
+- 未做：4.3 表格检测策略、4.4 阈值策略化（均为 P1，下一步）。
 
 ## 6. Phase 5：结构拆分与去重（P1）
 

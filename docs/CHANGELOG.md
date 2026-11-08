@@ -10,6 +10,21 @@
 
 ## [未发布]
 
+### 缺口误判修复（质量修复 Phase 4.1/4.2，2026-11-08）
+
+- **伪表格判据共用**：新增 `pipeline/table/prose.py`（`is_prose_cells` + 阈值），
+  建块降级与 L1 表格指标改用同一判据；`table_page_metrics(..., skip_prose=True)`
+  剔除页眉假表 / 整页正文假表，L1 的 `has_table` 由过滤后的真实表决定。
+  R-0002 不再因 `row_col_variance=2.25` 触发 `table_structure_broken`。
+- **密度阈值重标**：`CHAR_DENSITY_MIN_BY_TYPE` 从 2.0 / 1.0 调整为
+  **0.9（text_based）/ 0.5（mixed）**，scanned 与 image 保持 0.2；
+  新增分栏页阈值 **0.4**。门控与 `extract_quality` 共用同一阈值函数。
+  依据：黄金集中 R-0077（1.064）、R-0098（0.726）、R-0102（0.87）
+  均为人工判定合格页；纯扫描页字符数为 0，仍必然命中。
+- **needs_ocr 标识**：扫描页缺口证据新增 `needs_ocr`，与普通低密度缺口区分。
+- 复核：R-0002 / R-0033 / R-0036 / R-0077 / R-0098 / R-0102 全部 pass；
+  R-0139 / R-0140（needs_ocr）与 R-0162（近空白）仍为缺口。
+
 ### 统一归一化入口（质量修复 Phase 3，2026-11-08）
 
 - 新增 `pipeline/quality/normalization.py` 三个公共入口：

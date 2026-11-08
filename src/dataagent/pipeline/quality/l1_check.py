@@ -32,13 +32,17 @@ GLYPH_COVERAGE_MIN: Final[float] = 0.95
 CID_UNMAPPED_RATIO_MAX: Final[float] = 0.01
 EMPTY_REGION_RATIO_MAX: Final[float] = 0.30
 TABLE_PAGE_DENSITY_MIN: Final[float] = 0.5
+COLUMN_PAGE_DENSITY_MIN: Final[float] = 0.4
 READING_ORDER_SCORE_MIN: Final[float] = 0.88
 HEADER_FOOTER_LEAK_MAX: Final[float] = 0.05
 
-# P0 初值：按页型分档，上线前由黄金集标定（B9）。
+# 黄金集标定（2026-11-08，质量修复 Phase 4.2）：`char_density = 非空白字符数 / 468cm²`。
+# 旧值 2.0 / 1.0 会把版面稀疏但有效页面（多栏、图表、问答版式）判成缺口——
+# R-0077 1.064、R-0098 0.726、R-0102 0.87 均为人工判定合格页。
+# 新值取“仍能拦住近空白页（<0.2）”的下限；纯扫描页字符数为 0，依旧必然命中。
 CHAR_DENSITY_MIN_BY_TYPE: Final[Mapping[PdfType, float]] = {
-    PdfType.TEXT_BASED: 2.0,
-    PdfType.MIXED: 1.0,
+    PdfType.TEXT_BASED: 0.9,
+    PdfType.MIXED: 0.5,
     PdfType.SCANNED: 0.2,
     PdfType.IMAGE_BASED: 0.2,
 }
@@ -123,6 +127,7 @@ class L1PageInput:
     metrics: L1Metrics
     pdf_type: PdfType = PdfType.TEXT_BASED
     has_table: bool = False
+    has_columns: bool = False
     rotation: int = 0
     table_index: int | None = None
     bbox: tuple[float, float, float, float] | None = None
@@ -146,9 +151,7 @@ class L1Checker:
 
     def _defects(self, page: L1PageInput) -> tuple[Defect, ...]:
         metrics = page.metrics
-        threshold = CHAR_DENSITY_MIN_BY_TYPE[page.pdf_type]
-        if page.has_table:
-            threshold = min(threshold, TABLE_PAGE_DENSITY_MIN)
+        threshold = _density_threshold(page)
         defects: list[Defect] = []
 
         glyph_low = (
@@ -334,7 +337,7 @@ class L1Checker:
 
     def _extract_quality(self, page: L1PageInput) -> float:
         metrics = page.metrics
-        threshold = CHAR_DENSITY_MIN_BY_TYPE[page.pdf_type]
+        threshold = _density_threshold(page)
         parts: list[tuple[float, float]] = []
 
         def add(
@@ -404,6 +407,16 @@ def defects_for_repair(report: PageReport) -> tuple[Defect, ...]:
         for defect in report.defects
         if DEFECT_SPECS[defect.code].operator is not None
     )
+
+
+def _density_threshold(page: L1PageInput) -> float:
+    """字符密度阈值：页型分档，表格页 / 分栏页取更低的“稀疏但有效”阈值。"""
+    threshold = CHAR_DENSITY_MIN_BY_TYPE[page.pdf_type]
+    if page.has_table:
+        threshold = min(threshold, TABLE_PAGE_DENSITY_MIN)
+    if page.has_columns:
+        threshold = min(threshold, COLUMN_PAGE_DENSITY_MIN)
+    return threshold
 
 
 def _clamp(value: float) -> float:

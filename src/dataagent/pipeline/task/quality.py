@@ -295,20 +295,23 @@ class PageQualityService:
             pdf_type = self._profiles.get(context.record.doc_id, artifact.page_no).pdf_type
         except KeyError:
             pdf_type = PdfType.TEXT_BASED
-        has_table = artifact.page_no in extraction.pages_with_tables
+        declared_table = artifact.page_no in extraction.pages_with_tables
+        metrics = self._metrics_for(artifact.markdown, has_table=declared_table)
         return L1PageInput(
             doc_id=artifact.doc_id,
             page_no=artifact.page_no,
-            metrics=self._metrics_for(artifact.markdown, has_table=has_table),
+            metrics=metrics,
             pdf_type=pdf_type,
-            has_table=has_table,
+            # 伪表格已被过滤：只有真实表才算表格页，避免假缺口（R-0002）。
+            has_table=metrics.table_cell_fill is not None,
+            has_columns=artifact.page_no in extraction.pages_with_columns,
         )
 
     def _metrics_for(self, markdown: str, *, has_table: bool) -> L1Metrics:
         metrics = L1Metrics.from_text(markdown, text_area=self._config.text_area_cm2)
         if not has_table:
             return metrics
-        table = table_page_metrics(markdown)
+        table = table_page_metrics(markdown, skip_prose=True)
         if table is None:
             return metrics
         return replace(

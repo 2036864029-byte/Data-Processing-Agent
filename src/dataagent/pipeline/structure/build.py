@@ -42,6 +42,11 @@ from dataagent.pipeline.structure.models import (
 )
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.table.markdown import markdown_table_spans, markdown_tables
+from dataagent.pipeline.table.prose import (
+    PROSE_TABLE_AREA_RATIO,
+    SENTENCE_END,
+    is_prose_cells,
+)
 from dataagent.pipeline.table.router import TableRouting, route_tables
 from dataagent.pipeline.table.rowmerge import merge_logical_rows
 from dataagent.platform.observe.log import log_event
@@ -53,11 +58,7 @@ BBOX_TRUST_AREA_RATIO: Final[float] = 0.6
 SLOT_OVERLAP_RATIO: Final[float] = 0.15
 CAPTION_MAX_CHARS: Final[int] = 60
 CAPTION_SEARCH_DEPTH: Final[int] = 3
-PROSE_CELL_MIN_CHARS: Final[int] = 120
-PROSE_CELL_SHORT_MIN_CHARS: Final[int] = 20
-PROSE_TABLE_AREA_RATIO: Final[float] = 0.6
 RUNNING_HEADER_MIN_PAGES: Final[int] = 3
-SENTENCE_END: Final[str] = "。！？；：!?;:"
 HEADING_END_EXCLUDED: Final[str] = SENTENCE_END + "，、"
 _HEADING_RE: Final[re.Pattern[str]] = re.compile(r"^(#{1,6})\s+(.*)$")
 _CAPTION_RE: Final[re.Pattern[str]] = re.compile(r"表\s*\d+[-—.]?\d*")
@@ -823,19 +824,7 @@ def _is_prose_table(slot: TableSlot, page_bbox: BBox) -> bool:
         return False
     if _area(grid.bbox) / page_area < PROSE_TABLE_AREA_RATIO:
         return False
-    prose_cells = [
-        cell
-        for cell in grid.cells
-        if len(cell.text.strip()) >= PROSE_CELL_SHORT_MIN_CHARS
-        and any(mark in cell.text for mark in SENTENCE_END)
-    ]
-    if any(
-        len(cell.text.strip()) >= PROSE_CELL_MIN_CHARS
-        and any(mark in cell.text for mark in SENTENCE_END)
-        for cell in grid.cells
-    ):
-        return True
-    return len(prose_cells) >= 2
+    return is_prose_cells(cell.text for cell in grid.cells)
 
 
 def _demoted_text(lines: Sequence[str]) -> list[str]:

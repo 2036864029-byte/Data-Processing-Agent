@@ -38,6 +38,9 @@ def page_gap_from_outcome(
     notes = tuple(
         dict.fromkeys(action.notes for action in outcome.actions if action.notes)
     )
+    evidence = list(notes)
+    if artifact.needs_ocr:
+        evidence.append("needs_ocr")
     return PageGap(
         doc_id=artifact.doc_id,
         page_no=artifact.page_no,
@@ -45,5 +48,5 @@ def page_gap_from_outcome(
         tried_operators=tried,
         recommended_tier=recommended_tier,
         fallback_used=fallback,
-        evidence=notes,
+        evidence=tuple(evidence),
     )

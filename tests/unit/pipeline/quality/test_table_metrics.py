@@ -146,3 +146,22 @@ def test_grid_metrics_rejects_missing_header() -> None:
     assert metrics is not None
     assert metrics.header_ok is False
     assert table_structure_ok(metrics) is False
+
+
+def test_skip_prose_drops_header_fake_table() -> None:
+    """R-0002 形态：页眉 + 整页正文被识别成 2×3 表，L1 必须看不到这张表。"""
+    prose = "正文内容。" * 40
+    markdown = f"|2026/7/28 21:00|_||\n|---|---|---|\n|{prose}|||\n"
+
+    assert table_page_metrics(markdown) is not None
+    assert table_page_metrics(markdown, skip_prose=True) is None
+
+
+def test_skip_prose_keeps_real_table() -> None:
+    markdown = "| 项目 | 金额 |\n| --- | --- |\n| 合计 | 100 |\n"
+
+    metrics = table_page_metrics(markdown, skip_prose=True)
+
+    assert metrics is not None
+    assert metrics.tables == 1
+    assert metrics.header_ok is True
