@@ -92,7 +92,9 @@ def build_structure(
             else:
                 level = block.level
                 if block.kind == "heading":
-                    level = headings.resolve(block.text, level)
+                    level = headings.resolve(
+                        block.text, level, page_no=page.page_no
+                    )
                 page_blocks.append(
                     TextBlock(
                         block_id=block_id,

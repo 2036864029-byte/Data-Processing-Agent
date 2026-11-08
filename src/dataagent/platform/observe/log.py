@@ -107,6 +107,10 @@ def configure_logging(*, level: int = logging.INFO, stream: Any = None) -> None:
     logger.propagate = False
 
 
-def log_event(event: str, *, level: int = logging.INFO, **fields: Any) -> None:
-    """输出一条结构化事件；自动合并当前 span 上下文。"""
-    logging.getLogger(LOGGER_NAME).log(level, event, extra={"fields": fields})
+def log_event(event: str, *, log_level: int = logging.INFO, **fields: Any) -> None:
+    """输出一条结构化事件；自动合并当前 span 上下文。
+
+    日志级别参数叫 `log_level` 而不是 `level`：事件字段里本来就可能出现
+    `level`（如标题层级），同名会被参数绑定吞掉且不报错。
+    """
+    logging.getLogger(LOGGER_NAME).log(log_level, event, extra={"fields": fields})

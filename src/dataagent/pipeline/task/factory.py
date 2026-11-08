@@ -62,7 +62,7 @@ def create_builtin_runner(
     if route.requested:
         log_event(
             "delivery_target_routed" if route.routed else "delivery_target_fallback",
-            level=logging.INFO if route.routed else logging.WARNING,
+            log_level=logging.INFO if route.routed else logging.WARNING,
             **route.as_fields(),
         )
     output_dir = route.output_dir

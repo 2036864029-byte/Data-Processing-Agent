@@ -42,13 +42,35 @@ _MAX_NORMALIZE_PASSES: Final[int] = 4
 
 def normalize_text(text: str) -> str:
     """正文 / Markdown 入口：编号修复 + 伪空格 + 硬换行回流（收敛到不动点）。"""
+    return normalize_text_with_kinds(text)[0]
+
+
+def normalize_text_with_kinds(text: str) -> tuple[str, frozenset[str]]:
+    """归一结果 + 本次改动类型（`numbering` / `reflow` / `spaces`）。
+
+    供观测事件使用：调用方据此只记录“真的改了什么”，不做二次比对。
+    """
     current = text
+    kinds: set[str] = set()
     for _ in range(_MAX_NORMALIZE_PASSES):
-        updated = normalize_cjk_text(repair_numbering(current))
+        repaired = repair_numbering(current)
+        if repaired != current:
+            kinds.add("numbering")
+        updated = normalize_cjk_text(repaired)
+        if updated != repaired:
+            kinds.add(
+                "reflow"
+                if _line_count(updated) != _line_count(repaired)
+                else "spaces"
+            )
         if updated == current:
-            return current
+            return current, frozenset(kinds)
         current = updated
-    return current
+    return current, frozenset(kinds)
+
+
+def _line_count(text: str) -> int:
+    return len(text.splitlines())
 
 
 def normalize_cell(text: str) -> str:

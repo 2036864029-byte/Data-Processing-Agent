@@ -21,6 +21,7 @@ from dataagent.contracts.headings import (
     NumberingKind,
     classify_numbering,
 )
+from dataagent.pipeline.events import log_heading_decision
 
 
 class HeadingLevelNormalizer:
@@ -30,11 +31,27 @@ class HeadingLevelNormalizer:
         self._previous: int | None = None
         self._locked: dict[NumberingKind, int] = {}
 
-    def resolve(self, text: str, declared_level: int | None) -> int:
+    def resolve(
+        self,
+        text: str,
+        declared_level: int | None,
+        *,
+        page_no: int | None = None,
+    ) -> int:
         signal = classify_numbering(text)
-        level = self._bounded(self._candidate(signal, declared_level))
+        candidate = self._candidate(signal, declared_level)
+        level = self._bounded(candidate)
         if self._previous is not None:
             level = min(level, self._previous + 1)
+        if page_no is not None and (declared_level is None or level != declared_level):
+            source, reason = self._decision(signal, declared_level, candidate, level)
+            log_heading_decision(
+                page_no=page_no,
+                text=text,
+                source=source,
+                level=level,
+                reason=reason,
+            )
         if signal is not None:
             self._locked[signal.kind] = level
         self._previous = level
@@ -50,6 +67,26 @@ class HeadingLevelNormalizer:
         if signal is not None:
             return signal.level
         return 1
+
+    def _decision(
+        self,
+        signal: HeadingSignal | None,
+        declared_level: int | None,
+        candidate: int,
+        level: int,
+    ) -> tuple[str, str]:
+        """（来源, 原因）：只描述“层级不是原样照抄声明值”的情况。"""
+        if level != self._bounded(candidate):
+            return "clamped", "jump_clamped"
+        if signal is None:
+            if declared_level is None:
+                return "default", "fallback"
+            return "declared", "declared"
+        if signal.kind in self._locked:
+            return "numbering", "locked"
+        if declared_level is None:
+            return "numbering", "promoted"
+        return "declared", "declared"
 
     @staticmethod
     def _bounded(level: int) -> int:

@@ -2,7 +2,7 @@
 
 **日期**：2026-11-08
 **来源**：B9 标注审计（`docs/b9-calibration-diagnosis.md`）与表格/归一化代码审计
-**状态**：Phase 1–5 已完成（2026-11-08）；Phase 6–7 待实施
+**状态**：Phase 1–6 已完成（2026-11-08）；Phase 7 待实施
 **原则**：每个 Phase 独立可交付；先测试后改；全量门禁保持绿；阈值集中、不新增散落常量；
 单文件 ≤500 行；所有修复可回滚（按 Phase 单独提交）。
 
@@ -340,6 +340,30 @@
 - 重新生成 `review_rescore` / `review_final` / `review_v2`；
   `artifact_hash` 变化后旧分自动失效，`calibrate.py` 应返回 `stale_labels`；
 - 人工重评后再跑 `calibrate.py` / `qc_gate_report.py`。
+
+**实施结果（2026-11-08）**
+
+- 事件封装统一在 `pipeline/events.py`（事件名与字段的唯一来源）：
+  - `page_gap` 在原有 `defect_codes/fallback/tier` 上补
+    `metric/value/threshold`（取缺陷证据里诊断价值最高的指标）与
+    `page_type/text_layer/source`；quality、unsupported、unprocessed 三类来源都发。
+  - `heading_decision`：`source` 取值 `numbering` / `declared` / `clamped` /
+    `default`，`reason` 取值 `promoted` / `locked` / `declared` /
+    `jump_clamped` / `fallback`。与计划的差异：无法区分“Markdown 声明”与
+    “结构元素角色”，两者在建块层已合成为 `declared_level`，统一记为
+    `declared`；仅在层级不等于声明值时才发，避免整本几百条噪音。
+  - `normalization_applied`：`kind` = `spaces` / `reflow` / `numbering` / `cell`。
+    正文三类由 `normalize_text_with_kinds` 在收敛循环里直接给出；
+    `cell` 由建块槽位在网格真的变化时发出。
+- **踩坑**：`log_event(event, *, level=...)` 的参数名与事件字段 `level`（标题层级）
+  同名，该字段被吞掉且不报错——`heading_decision` 整条事件静默丢失。
+  参数改名为 `log_level`（全仓无其他 `level=` 调用方）。
+- 新增 `quality/l1_input.py`：`l1_metrics` / `build_l1_input` 由生产与回归测试共用，
+  避免测试里重写“伪表过滤 + has_table 推导”而与生产漂移。
+- 新增 `tests/e2e/test_quality_regression.py`（10 例）：4 个假缺口转 pass、
+  2 个扫描页仍 `needs_ocr`、2 个伪表页交付 0 表、R-0023 编号/词序、R-0041 形状。
+- 未做：重新生成 `review_rescore` / `review_final` / `review_v2` 与人工重评。
+  按总计划，等 Phase 7 也落地后一次性重生成，避免中间态产物反复失效。
 
 ## 8. Phase 7：残留质量（P2）
 

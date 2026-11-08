@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dataagent.contracts.errors import DefectCode
 from dataagent.contracts.messages import Verdict
+from dataagent.pipeline.events import log_page_gap
 from dataagent.pipeline.merge.merger import MergedDocument, merge_document
 from dataagent.pipeline.output.delivery import (
     DeliveryDecision,
@@ -93,11 +94,20 @@ class DocumentDeliveryService:
         )
         for page in sorted(scope):
             if page not in context.processed:
+                gap_source = (
+                    f"plan_stopped:{stopped_by}" if stopped_by else "unprocessed"
+                )
                 context.gaps[page] = PageGap(
                     doc_id=doc_id,
                     page_no=page,
                     defect_codes=(),
-                    evidence=(f"plan_stopped:{stopped_by}" if stopped_by else "unprocessed",),
+                    evidence=(gap_source,),
+                )
+                log_page_gap(
+                    doc_id=doc_id,
+                    page_no=page,
+                    codes=(),
+                    source=gap_source,
                 )
 
         source: PdfplumberTableSource | None = None

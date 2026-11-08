@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import replace
 
 from dataagent.contracts.artifacts import ExtractionResult, PageArtifact
 from dataagent.contracts.defects import RepairTier
 from dataagent.contracts.messages import PageReport, Verdict
 from dataagent.contracts.policies import PdfType, ProfileQuality, ProfileSignals, Tier
 from dataagent.kernel.policies.rule_tier import RuleTierPolicy
+from dataagent.pipeline.events import log_normalization_applied, log_page_gap
 from dataagent.pipeline.profile.writer import PageProfileWriter
 from dataagent.pipeline.quality.gate import QualityGate, QualityResultStore
 from dataagent.pipeline.quality.l1_check import (
@@ -18,8 +18,8 @@ from dataagent.pipeline.quality.l1_check import (
     L1PageInput,
     defects_for_repair,
 )
-from dataagent.pipeline.quality.normalization import normalize_text
-from dataagent.pipeline.quality.table_metrics import table_page_metrics
+from dataagent.pipeline.quality.l1_input import build_l1_input, l1_metrics
+from dataagent.pipeline.quality.normalization import normalize_text_with_kinds
 from dataagent.pipeline.repair.fallback import resolve_fallback
 from dataagent.pipeline.repair.gap import PageGap, page_gap_from_outcome
 from dataagent.pipeline.repair.loop import (
@@ -33,7 +33,7 @@ from dataagent.pipeline.sniff.sniffer import Family
 from dataagent.pipeline.task.config import TaskConfig
 from dataagent.pipeline.task.context import DocumentContext
 from dataagent.pipeline.telemetry import TaskTelemetry
-from dataagent.platform.observe.log import log_event, span
+from dataagent.platform.observe.log import span
 
 _STRATEGY_ROUNDS = {"quality": 3, "balanced": 2, "fast": 1}
 
@@ -86,6 +86,12 @@ class PageQualityService:
                 evidence=("image_chain_unsupported",),
             )
             context.processed.add(page)
+            log_page_gap(
+                doc_id=context.record.doc_id,
+                page_no=page,
+                codes=(),
+                source="unsupported",
+            )
 
     def qualify(
         self,
@@ -96,10 +102,14 @@ class PageQualityService:
     ) -> None:
         page = artifact.page_no
         if context.routing.family is Family.PDF:
-            normalized = normalize_text(artifact.markdown)
+            normalized, kinds = normalize_text_with_kinds(artifact.markdown)
             if normalized != artifact.markdown:
                 artifact = artifact.model_copy(update={"markdown": normalized})
                 context.artifacts[page] = artifact
+                for kind in sorted(kinds):
+                    log_normalization_applied(
+                        page_no=page, kind=kind, changed=True
+                    )
         started = self._clock()
         with span(
             "quality",
@@ -240,14 +250,23 @@ class PageQualityService:
             recommended_tier=_repair_tier(self._tier_for(context, artifact.page_no, report)),
         )
         context.gaps[artifact.page_no] = gap
-        log_event(
-            "page_gap",
+        log_page_gap(
             doc_id=artifact.doc_id,
             page_no=artifact.page_no,
-            defect_codes=[code.value for code in gap.defect_codes],
+            codes=[code.value for code in gap.defect_codes],
+            defects=report.defects,
+            page_type=self._page_type(context, artifact.page_no),
+            text_layer=artifact.text_layer,
+            source="quality",
             fallback=gap.fallback_used.value,
             tier=None if gap.recommended_tier is None else gap.recommended_tier.value,
         )
+
+    def _page_type(self, context: DocumentContext, page_no: int) -> str | None:
+        try:
+            return self._profiles.get(context.record.doc_id, page_no).pdf_type.value
+        except KeyError:
+            return None
 
     def _tier_for(self, context: DocumentContext, page_no: int, report: PageReport) -> Tier | None:
         try:
@@ -296,31 +315,21 @@ class PageQualityService:
         except KeyError:
             pdf_type = PdfType.TEXT_BASED
         declared_table = artifact.page_no in extraction.pages_with_tables
-        metrics = self._metrics_for(artifact.markdown, has_table=declared_table)
-        return L1PageInput(
+        return build_l1_input(
             doc_id=artifact.doc_id,
             page_no=artifact.page_no,
-            metrics=metrics,
+            markdown=artifact.markdown,
             pdf_type=pdf_type,
-            # 伪表格已被过滤：只有真实表才算表格页，避免假缺口（R-0002）。
-            has_table=metrics.table_cell_fill is not None,
+            declared_table=declared_table,
             has_columns=artifact.page_no in extraction.pages_with_columns,
+            text_area=self._config.text_area_cm2,
+            policy=self._config.table_policy,
         )
 
     def _metrics_for(self, markdown: str, *, has_table: bool) -> L1Metrics:
-        metrics = L1Metrics.from_text(markdown, text_area=self._config.text_area_cm2)
-        if not has_table:
-            return metrics
-        table = table_page_metrics(
-            markdown, skip_prose=True, policy=self._config.table_policy
-        )
-        if table is None:
-            return metrics
-        return replace(
-            metrics,
-            table_cell_fill=table.cell_fill,
-            row_col_consistency=table.column_variance,
-            table_header_ok=table.header_ok,
-            row_occupancy=table.row_occupancy,
-            col_occupancy=table.col_occupancy,
+        return l1_metrics(
+            markdown,
+            text_area=self._config.text_area_cm2,
+            declared_table=has_table,
+            policy=self._config.table_policy,
         )

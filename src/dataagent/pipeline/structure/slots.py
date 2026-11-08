@@ -13,6 +13,7 @@ from dataclasses import replace
 from typing import Final
 
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.events import log_normalization_applied
 from dataagent.pipeline.quality.normalization import normalize_table_grid
 from dataagent.pipeline.structure.lines import Line
 from dataagent.pipeline.structure.models import BBox, TableSlot
@@ -78,10 +79,17 @@ def build_slots(
     demoted: list[tuple[int, int]] = []
     # 先做单元格文本归一，再做逻辑行合并：合并会把逻辑行用 \n 拼进同一单元格，
     # 之后再归一就会把逻辑行边界并掉。
-    slots = [
-        replace(slot, grid=merge_logical_rows(normalize_table_grid(slot.grid)))
-        for slot in slots
-    ]
+    normalized: list[TableSlot] = []
+    cells_changed = False
+    for slot in slots:
+        normalized_grid = normalize_table_grid(slot.grid)
+        cells_changed = cells_changed or normalized_grid != slot.grid
+        normalized.append(
+            replace(slot, grid=merge_logical_rows(normalized_grid))
+        )
+    slots = normalized
+    if cells_changed:
+        log_normalization_applied(page_no=page_no, kind="cell", changed=True)
     # 有坐标项时同样要拦 L0 伪表格：否则整页正文会被假表吞掉，
     # 坐标项也不会再进入文本块（R-0033 / R-0036 实测）。
     kept: list[TableSlot] = []

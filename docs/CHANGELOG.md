@@ -10,6 +10,24 @@
 
 ## [未发布]
 
+### 观测事件与黄金样本回归（质量修复 Phase 6，2026-11-08）
+
+- **缺口可追溯**：`page_gap` 事件扩充为“主指标视图”——`defect_codes` +
+  `metric` / `value` / `threshold` + `page_type` / `text_layer` / `source`；
+  quality / unsupported / unprocessed 三类来源统一经 `pipeline/events.py` 发出。
+- **标题决策可追溯**：新增 `heading_decision`（page / text / source / level /
+  reason），仅在层级不是原样照抄声明值时才发（编号提升、锁层、跳级下调、兜底）。
+- **归一化可追溯**：新增 `normalization_applied`（page / kind / changed），
+  kind = `spaces` / `reflow` / `numbering` / `cell`；`normalize_text_with_kinds`
+  在收敛循环内直接给出改动类型，避免事后二次比对。
+- **`log_event` 参数改名**：`level` → `log_level`。事件字段本来就可能叫 `level`
+  （标题层级），同名会被参数绑定吞掉且**不报错**——本次实测该事件被静默丢弃。
+- **L1 输入装配共用**：新增 `quality/l1_input.py`（`l1_metrics` /
+  `build_l1_input`），生产与回归测试同源，避免测试重写一遍判定逻辑。
+- **黄金样本回归**：新增 `tests/e2e/test_quality_regression.py`（10 例，
+  语料缺失自动 skip）——4 个假缺口转 pass、2 个扫描页仍 `needs_ocr`、
+  2 个伪表页交付 0 表、R-0023 编号/词序、R-0041 表格形状。
+
 ### 结构拆分与工具去重（质量修复 Phase 5，2026-11-08）
 
 - `pipeline/structure/build.py` **884 → 143 行**，按职责拆为：
