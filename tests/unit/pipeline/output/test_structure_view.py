@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from dataagent.contracts.structure import TableBlock
+from dataagent.contracts.structure import TableBlock, TextBlock
 from dataagent.contracts.table import TableCell, TableGrid
 from dataagent.pipeline.merge.merger import (
     MergedDocument,
@@ -177,6 +177,57 @@ def test_build_structure_smooths_heading_levels() -> None:
     assert "### 五级" in rendered
     assert "### 三级" not in rendered
     assert "##### 五级" not in rendered
+
+
+def test_first_heading_keeps_markdown_level() -> None:
+    """首个标题不再被提升：R-0023 原始 `## 198.` 交付仍是 `## 198.`。"""
+    source = MergedDocument(
+        doc_id="doc",
+        pages=(
+            MergedPage(
+                page_no=1,
+                markdown="## 198. 某案例\n\n## 199. 另一案例\n",
+            ),
+        ),
+        validation=ValidationResult(),
+    )
+    blocks = build_document_blocks(source, layouts={})
+
+    structure = build_structure(blocks, doc_id="doc")
+
+    levels = [
+        block.level
+        for block in structure.pages[0].blocks
+        if isinstance(block, TextBlock) and block.role == "heading"
+    ]
+    assert levels == [2, 2]
+    rendered = to_markdown_view(
+        structure, page_order=[1], fallback={1: source.pages[0].markdown}
+    )
+    assert rendered.startswith("## 198. 某案例")
+    assert "## 199. 另一案例" in rendered
+
+
+def test_heading_levels_stay_consistent_across_pages() -> None:
+    source = MergedDocument(
+        doc_id="doc",
+        pages=(
+            MergedPage(page_no=1, markdown="## 一、总则\n"),
+            MergedPage(page_no=2, markdown="## 二、分则\n"),
+        ),
+        validation=ValidationResult(),
+    )
+    blocks = build_document_blocks(source, layouts={})
+
+    structure = build_structure(blocks, doc_id="doc")
+
+    levels = [
+        block.level
+        for page in structure.pages
+        for block in page.blocks
+        if isinstance(block, TextBlock) and block.role == "heading"
+    ]
+    assert levels == [2, 2]
 
 
 def test_build_meta_contains_delivery_and_gaps() -> None:

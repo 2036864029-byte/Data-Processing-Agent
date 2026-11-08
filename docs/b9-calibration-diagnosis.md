@@ -1,5 +1,8 @@
 # B9 标定诊断（2026-11-06）
 
+> 后续整改顺序与验收门禁见
+> [`specs/001-heterogeneous-data-agent/plan-quality-remediation.md`](../specs/001-heterogeneous-data-agent/plan-quality-remediation.md)。
+
 ## 结论
 
 60 页人工四维打分**已完成**（T122 可关闭）；T123 / T124 未达标的瓶颈不是标注页数，

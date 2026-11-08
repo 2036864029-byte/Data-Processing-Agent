@@ -20,9 +20,9 @@ from typing import Any, Final
 import pdf_inspector
 
 from dataagent.contracts.artifacts import PageArtifact
+from dataagent.contracts.headings import MAX_HEADING_CHARS, classify_numbering
 
 MIN_TEXT_PAGES_FOR_HEADING_CHECK: Final[int] = 30
-MAX_HEADING_CHARS: Final[int] = 80
 MAX_HEADING_LINE_EXTRA: Final[int] = 20
 CALIBRATED_WARNING: Final[str] = "heading_calibrated"
 FAILED_WARNING: Final[str] = "heading_calibration_failed"
@@ -159,8 +159,14 @@ def _inject(markdown: str, items: Sequence[tuple[int, int, str]]) -> str:
             continue
         if len(stripped) > len(text) + MAX_HEADING_LINE_EXTRA:
             continue
-        lines[line_index] = "#" * level + " " + stripped
+        lines[line_index] = "#" * _aligned_level(text, level) + " " + stripped
     return "\n".join(lines) + ("\n" if markdown.endswith("\n") else "")
+
+
+def _aligned_level(text: str, declared: int) -> int:
+    """按中文编号语义对齐层级，避免与主链路（structure/headings）二次改级。"""
+    signal = classify_numbering(text)
+    return signal.level if signal is not None else declared
 
 
 def _looks_like_heading(text: str) -> bool:

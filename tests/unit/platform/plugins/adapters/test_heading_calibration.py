@@ -73,6 +73,28 @@ def test_headings_are_mapped_by_text_and_page_order(monkeypatch) -> None:
     assert "heading_calibrated" in calibrated[0].warnings
 
 
+def test_injected_level_follows_numbering_semantics(monkeypatch) -> None:
+    """process_pdf 的层级与中文编号冲突时，以编号语义为准（与主链路一致）。"""
+    artifacts = (
+        artifact(1, "第一章 总则\n正文A\n"),
+        artifact(2, "一、申请条件\n正文B\n"),
+    )
+
+    def fake_process(path: str, pages: list[int] | None = None):
+        return SimpleNamespace(
+            markdown="### 第一章 总则\n\n正文A\n\n### 一、申请条件\n\n正文B\n"
+        )
+
+    monkeypatch.setattr(
+        heading_calibration.pdf_inspector, "process_pdf", fake_process
+    )
+
+    calibrated, _outcome = calibrate_headings("book.pdf", artifacts)
+
+    assert calibrated[0].markdown.startswith("# 第一章 总则")
+    assert calibrated[1].markdown.startswith("## 一、申请条件")
+
+
 def test_duplicate_headings_are_assigned_sequentially(monkeypatch) -> None:
     artifacts = (
         artifact(1, "重复标题\n正文一\n"),

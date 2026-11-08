@@ -18,6 +18,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Final
 
+from dataagent.contracts.headings import (
+    MAX_HEADING_CHARS,
+    HeadingSignal,
+    classify_numbering,
+    level_from_role,
+)
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.merge.merger import MergedDocument, MergedPage
 from dataagent.pipeline.quality.text_normalize import normalize_cjk_text
@@ -49,6 +55,7 @@ PROSE_CELL_SHORT_MIN_CHARS: Final[int] = 20
 PROSE_TABLE_AREA_RATIO: Final[float] = 0.6
 RUNNING_HEADER_MIN_PAGES: Final[int] = 3
 SENTENCE_END: Final[str] = "。！？；：!?;:"
+HEADING_END_EXCLUDED: Final[str] = SENTENCE_END + "，、"
 _HEADING_RE: Final[re.Pattern[str]] = re.compile(r"^(#{1,6})\s+(.*)$")
 _CAPTION_RE: Final[re.Pattern[str]] = re.compile(r"表\s*\d+[-—.]?\d*")
 _SEPARATOR_CELL_RE: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
@@ -158,6 +165,7 @@ def build_page_blocks(
             items=layout.items,
             slots=slots,
             page_bbox=page_bbox,
+            roles=dict(layout.roles),
             dropped_lines=dropped_lines,
         )
         warnings.extend(item_warnings)
@@ -347,6 +355,20 @@ def _markdown_blocks(
             )
             index += 1
             continue
+        signal = _promotable_numbering(lines[index])
+        if signal is not None:
+            flush()
+            blocks.append(
+                Block(
+                    kind="heading",
+                    page_no=page_no,
+                    bbox=page_bbox,
+                    text=lines[index].strip(),
+                    level=signal.level,
+                )
+            )
+            index += 1
+            continue
         if not lines[index].strip():
             flush()
             index += 1
@@ -400,6 +422,7 @@ def _item_blocks(
     items: Sequence[PositionedText],
     slots: Sequence[TableSlot],
     page_bbox: BBox,
+    roles: Mapping[int, str],
     dropped_lines: frozenset[str] = frozenset(),
 ) -> tuple[list[Block], list[str]]:
     headings = _heading_entries(markdown)
@@ -444,6 +467,19 @@ def _item_blocks(
                 )
             )
             matched.add(heading_index)
+            continue
+        level = _promoted_level(line, roles)
+        if level is not None:
+            flush()
+            blocks.append(
+                Block(
+                    kind="heading",
+                    page_no=page_no,
+                    bbox=line.bbox,
+                    text=line.text.strip(),
+                    level=level,
+                )
+            )
             continue
         if paragraph and _starts_new_paragraph(
             paragraph[-1], line, median_width
@@ -492,6 +528,36 @@ def _match_heading(
     for index, (_level, _text, heading_norm) in enumerate(headings):
         if index not in matched and heading_norm == norm:
             return index
+    return None
+
+
+def _promotable_numbering(text: str) -> HeadingSignal | None:
+    """结构性中文编号（章/节/一、/（一））本身即可成为标题。"""
+    signal = classify_numbering(text)
+    if signal is None or not signal.kind.promotable:
+        return None
+    return signal
+
+
+def _promoted_level(line: _Line, roles: Mapping[int, str]) -> int | None:
+    """坐标项行 → 标题层级：编号优先，tagged PDF 角色兜底。"""
+    signal = _promotable_numbering(line.text)
+    if signal is not None:
+        return signal.level
+    return _role_level(line, roles)
+
+
+def _role_level(line: _Line, roles: Mapping[int, str]) -> int | None:
+    """H1–H6 角色兜底：只收短行且非句末标点，避免把正文提升为标题。"""
+    text = line.text.strip()
+    if not text or len(text) > MAX_HEADING_CHARS or text[-1] in HEADING_END_EXCLUDED:
+        return None
+    for item in line.items:
+        if item.mcid is None:
+            continue
+        level = level_from_role(roles.get(item.mcid, ""))
+        if level is not None:
+            return level
     return None
 
 

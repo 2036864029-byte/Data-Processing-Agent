@@ -42,6 +42,16 @@ def test_chinese_numbering_rebuilds_paragraphs_and_headings() -> None:
     assert outcome.headings_added == 2
 
 
+def test_section_numbering_becomes_heading_clause_stays_paragraph() -> None:
+    """`第X节` → 标题；`（一）` 是条文内枚举项，只分段不建标题。"""
+    outcome = normalize_layout("第二节 管辖 （一）基层法院 （二）中级法院 ")
+
+    assert "## 第二节 管辖" in outcome.markdown
+    assert "（一）基层法院" in outcome.markdown
+    assert "### （一）" not in outcome.markdown
+    assert outcome.headings_added == 1
+
+
 def test_long_table_is_left_untouched() -> None:
     table = "|a|b|c|\n|---|---|---|\n" + "".join(
         f"|row{i}|{i * 2}|value{i}|\n" for i in range(40)

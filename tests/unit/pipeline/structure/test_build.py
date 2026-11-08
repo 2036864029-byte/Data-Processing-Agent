@@ -113,6 +113,81 @@ def test_heading_level_comes_from_markdown_not_structure_role() -> None:
     assert result.page.blocks[0].level == 2
 
 
+def test_numbering_line_becomes_heading_in_markdown_path() -> None:
+    result = build_page_blocks(
+        page_no=1,
+        markdown="第一章 总则\n\n正文内容结束。\n",
+        layout=PageLayout(page_no=1),
+    )
+
+    heading, paragraph = result.page.blocks
+    assert heading.kind == "heading"
+    assert heading.text == "第一章 总则"
+    assert heading.level == 1
+    assert paragraph.kind == "text"
+
+
+def test_numbering_line_becomes_heading_in_item_path() -> None:
+    items = [
+        item("第一节 管辖", 50, 700, width=80),
+        item("正文内容结束。", 50, 670, width=80),
+    ]
+
+    result = build_page_blocks(
+        page_no=1,
+        markdown="第一节 管辖\n\n正文内容结束。\n",
+        layout=layout(items),
+    )
+
+    heading = result.page.blocks[0]
+    assert heading.kind == "heading"
+    assert heading.text == "第一节 管辖"
+    assert heading.level == 2
+
+
+def test_numbering_beats_structure_role() -> None:
+    items = [item("一、章节", 50, 700, width=80, mcid=9)]
+
+    result = build_page_blocks(
+        page_no=1,
+        markdown="",
+        layout=PageLayout(page_no=1, items=tuple(items), roles=((9, "H1"),)),
+    )
+
+    assert result.page.blocks[0].level == 2
+
+
+def test_structure_role_is_heading_fallback() -> None:
+    items = [
+        item("概述", 50, 700, width=60, mcid=9),
+        item("正文内容结束。", 50, 670, width=80),
+    ]
+
+    result = build_page_blocks(
+        page_no=1,
+        markdown="概述\n\n正文内容结束。\n",
+        layout=PageLayout(page_no=1, items=tuple(items), roles=((9, "H2"),)),
+    )
+
+    heading, paragraph = result.page.blocks
+    assert heading.kind == "heading"
+    assert heading.text == "概述"
+    assert heading.level == 2
+    assert paragraph.kind == "text"
+
+
+def test_sentence_with_structure_role_stays_body() -> None:
+    items = [item("这是一段正文内容。", 50, 700, width=120, mcid=9)]
+
+    result = build_page_blocks(
+        page_no=1,
+        markdown="这是一段正文内容。\n",
+        layout=PageLayout(page_no=1, items=tuple(items), roles=((9, "H2"),)),
+    )
+
+    assert [block.kind for block in result.page.blocks] == ["text"]
+
+
 def test_table_slot_replaces_l0_and_excludes_table_items() -> None:
     items = [*table_items(), item("正文", 50, 600, width=60)]
 

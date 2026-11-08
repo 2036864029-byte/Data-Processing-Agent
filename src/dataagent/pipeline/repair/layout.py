@@ -15,15 +15,11 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
+from dataagent.contracts.headings import classify_numbering
+
 PSEUDO_TABLE_CELL_RATIO: Final[float] = 0.6
 PSEUDO_TABLE_MIN_CHARS: Final[int] = 200
 
-_CHAPTER_RE: Final[re.Pattern[str]] = re.compile(
-    r"^第[一二三四五六七八九十百零〇\d]+章"
-)
-_TOP_SECTION_RE: Final[re.Pattern[str]] = re.compile(
-    r"^[一二三四五六七八九十]+、"
-)
 _ARTICLE_RE: Final[re.Pattern[str]] = re.compile(
     r"^第[一二三四五六七八九十百零〇\d]+条"
 )
@@ -31,7 +27,7 @@ _ITEM_RE: Final[re.Pattern[str]] = re.compile(
     r"^（[一二三四五六七八九十]+）"
 )
 _MARKER_RE: Final[re.Pattern[str]] = re.compile(
-    r"第[一二三四五六七八九十百零〇\d]+[条章]"
+    r"第[一二三四五六七八九十百零〇\d]+[条章节]"
     r"|（[一二三四五六七八九十]+）"
     r"|(?:^|(?<=\s))[一二三四五六七八九十]+、",
     re.MULTILINE,
@@ -165,13 +161,10 @@ def _segment_hierarchy(markdown: str) -> tuple[str, int]:
                 output.append(stripped)
                 continue
             for segment in _split_markers(stripped):
-                if _CHAPTER_RE.match(segment):
+                signal = classify_numbering(segment)
+                if signal is not None and signal.kind.promotable:
                     _ensure_blank(output)
-                    output.append("# " + segment)
-                    headings += 1
-                elif _TOP_SECTION_RE.match(segment):
-                    _ensure_blank(output)
-                    output.append("## " + segment)
+                    output.append("#" * signal.level + " " + segment)
                     headings += 1
                 elif _ARTICLE_RE.match(segment) or _ITEM_RE.match(segment):
                     _ensure_blank(output)

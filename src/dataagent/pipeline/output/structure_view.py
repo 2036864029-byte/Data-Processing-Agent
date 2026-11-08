@@ -15,6 +15,7 @@ from dataagent.contracts.structure import (
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.merge.merger import MergedDocument
 from dataagent.pipeline.output.delivery import DeliveryDecision
+from dataagent.pipeline.structure.headings import HeadingLevelNormalizer
 from dataagent.pipeline.structure.models import DocumentBlocks
 from dataagent.pipeline.table.html import to_html
 
@@ -67,7 +68,7 @@ def build_structure(
 
     block_index = 0
     pages: list[PageStructure] = []
-    previous_level = 0
+    headings = HeadingLevelNormalizer()
     for page in blocks.pages:
         if page.gap:
             continue
@@ -90,9 +91,8 @@ def build_structure(
                 )
             else:
                 level = block.level
-                if block.kind == "heading" and level is not None:
-                    level = min(level, previous_level + 1)
-                    previous_level = level
+                if block.kind == "heading":
+                    level = headings.resolve(block.text, level)
                 page_blocks.append(
                     TextBlock(
                         block_id=block_id,
