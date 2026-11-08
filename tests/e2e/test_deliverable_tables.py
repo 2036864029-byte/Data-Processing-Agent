@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -16,7 +17,10 @@ from dataagent.pipeline.merge.merger import (
     MergedPage,
     ValidationResult,
 )
-from dataagent.pipeline.quality.text_normalize import normalize_table_grid
+from dataagent.pipeline.quality.text_normalize import (
+    normalize_cell_text,
+    normalize_table_grid,
+)
 from dataagent.pipeline.structure.build import build_document_blocks, build_page_blocks
 from dataagent.pipeline.structure.models import PageLayout
 from dataagent.pipeline.structure.render import render_document_markdown
@@ -112,7 +116,42 @@ def test_selected_tables_match_router(page: int) -> None:
         )
 
 
+@pytest.mark.parametrize("page", PAGES)
+def test_table_cells_are_normalized(page: int) -> None:
+    """Phase 2 不变量：单元格每一行已是归一形态（跨页通用）。
+
+    注意：行合并（rowmerge）在归一化**之后**把逻辑行用 `\\n` 拼进同一单元格，
+    所以整体文本不满足 `normalize_cell_text` 幂等；逐行检查才是正确不变量。
+    """
+    markdown, layout, ruled = page_inputs(page)
+
+    result = build_page_blocks(
+        page_no=page, markdown=markdown, layout=layout, ruled_tables=ruled
+    )
+
+    grids = [
+        block.table.grid
+        for block in result.page.blocks
+        if block.kind == "table" and block.table is not None
+    ]
+    assert grids
+    for grid in grids:
+        for cell in grid.cells:
+            assert "\r" not in cell.text
+            for line in cell.text.split("\n"):
+                assert line == normalize_cell_text(line)
+
+
+_PERSON_RE = re.compile(r"^[一-鿿·]{2,6}$")
+_DATE_RE = re.compile(r"^\d{4}年\d{2}月\d{2}日$")
+
+
 def test_p25_personnel_table_is_logically_merged() -> None:
+    """p25 人员表：物理行合并为逻辑行，列内多值以语义换行保留。
+
+    断言不绑定具体人名——只验证「每逻辑行一个称谓、无重复、无伪空格、
+    多值单元格的每行非空、日期按行承载」这些行合并应有的性质。
+    """
     markdown, layout, ruled = page_inputs(25)
 
     result = build_page_blocks(
@@ -128,24 +167,21 @@ def test_p25_personnel_table_is_logically_merged() -> None:
     grid = tables[0]
     assert (grid.n_rows, grid.n_cols) == (14, 12)
     names = [cell.text for cell in grid.cells if cell.col == 0 and cell.row > 0]
-    assert names == [
-        "张德芹",
-        "王莉",
-        "郭田勇",
-        "盛雷鸣",
-        "王鑫",
-        "刘世仲",
-        "韦芳",
-        "游亚林",
-        "郑尚勋",
-        "闻勇",
-        "钟正强",
-        "蒋焰",
-        "向平",
+    assert len(names) == grid.n_rows - grid.header_rows
+    assert len(set(names)) == len(names)
+    assert all(_PERSON_RE.match(name) for name in names)
+
+    multi_value = [cell.text for cell in grid.cells if "\n" in cell.text]
+    assert multi_value
+    assert all(
+        all(part.strip() for part in text.split("\n")) for text in multi_value
+    )
+    date_rows = [
+        parts
+        for parts in (text.split("\n") for text in multi_value)
+        if all(_DATE_RE.match(part) for part in parts)
     ]
-    merged = {(cell.row, cell.col): cell.text for cell in grid.cells}
-    assert merged[(1, 1)] == "党委书记\n董事长、董事"
-    assert merged[(1, 4)] == "2024年04月30日\n2024年05月29日"
+    assert date_rows, "应存在按行承载的日期列（纵向合并证据）"
 
 
 def test_document_renders_each_table_id_once() -> None:

@@ -138,8 +138,10 @@
   `韦 芳` / `闻 勇` / `蒋 焰` / `向 平` 等姓名伪空格消除。
 - 原计划的 R-0041 在上述口径下本身无伪空格（p1–40 单元格 0 处），
   真正的收益是折行回流与行内填充空格；验收改用 p1–40 全量前后对照。
-- `tests/e2e/test_deliverable_tables.py` 旧期望含伪空格，已按新口径更新，
-  对照口径改为 `merge_logical_rows(normalize_table_grid(...))`。
+- `tests/e2e/test_deliverable_tables.py`：删除人名/单元格字面量快照，改为不变量断言
+  （每逻辑行一个称谓、无重复、姓名无 CJK 空格、多值单元格每行非空、日期按行承载），
+  并新增跨 4 页“逐行归一幂等”断言；对照口径改为
+  `merge_logical_rows(normalize_table_grid(...))`。
 
 ## 4. Phase 3：统一归一化入口（P0）
 
