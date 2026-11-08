@@ -10,6 +10,19 @@
 
 ## [未发布]
 
+### 表格策略集中与无框线表评估（质量修复 Phase 4.3/4.4，2026-11-08）
+
+- **阈值集中**：新增 `pipeline/table/policy.py`（`TablePolicy` + `TableSource`），
+  验收网关 / 路由择优 / 伪表判定的阈值不再散落在 acceptance / router / prose /
+  build 四处；默认值等于迁移前行为，可经 `TaskConfig.table_policy` 注入。
+  来源字符串改为 `TableSource` StrEnum（`markdown` / `geometry` / `ruled`）。
+- **无框线表评估**：`PdfplumberTableSource(include_text_strategy=...)` 支持
+  pdfplumber `text` 策略候选（与 lines 结果按 bbox 去重）；路由要求 text 候选
+  必须有 L0 参考（拒绝原因 `text_without_reference`），避免正文页虚报表格。
+  评估（19 份文档 × 前 10 页，三种 text 变体）：候选 9–21 个、验收通过 2–12 个、
+  **优于 L0 Markdown 0 次** → `TablePolicy.enable_text_strategy` 默认关闭，
+  geometry 仍是无框线表的主路径。
+
 ### 缺口误判修复（质量修复 Phase 4.1/4.2，2026-11-08）
 
 - **伪表格判据共用**：新增 `pipeline/table/prose.py`（`is_prose_cells` + 阈值），

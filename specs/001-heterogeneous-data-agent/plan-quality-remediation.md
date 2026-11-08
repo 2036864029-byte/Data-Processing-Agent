@@ -2,7 +2,7 @@
 
 **日期**：2026-11-08
 **来源**：B9 标注审计（`docs/b9-calibration-diagnosis.md`）与表格/归一化代码审计
-**状态**：Phase 1–3 与 Phase 4.1/4.2（P0）已完成（2026-11-08）；Phase 4.3/4.4（P1）与 Phase 5–7 待实施
+**状态**：Phase 1–3 与 Phase 4（含 4.3/4.4）已完成（2026-11-08）；Phase 5–7 待实施
 **原则**：每个 Phase 独立可交付；先测试后改；全量门禁保持绿；阈值集中、不新增散落常量；
 单文件 ≤500 行；所有修复可回滚（按 Phase 单独提交）。
 
@@ -263,7 +263,20 @@
 - 复核（逐页重放 L1）：R-0002 / R-0033 / R-0036 / R-0077 / R-0098 / R-0102 → pass；
   R-0139 / R-0140 → `encoding_loss` + `low_density`，`needs_ocr=True`；
   R-0162 → `low_density`（近空白，保持缺口）。
-- 未做：4.3 表格检测策略、4.4 阈值策略化（均为 P1，下一步）。
+- 4.4 阈值集中：新增 `pipeline/table/policy.py` —— `TablePolicy` 收拢验收五项、
+  路由四项、伪表四项（含 `prose_short_cell_count`），`TableSource` StrEnum 取代
+  `"markdown"/"geometry"/"ruled"` 字面量。`TaskConfig.table_policy` 注入，
+  交付与质检各自取用；默认值 = 迁移前行为（`test_policy.py` 锁定）。
+- 4.3 无框线表评估：`PdfplumberTableSource(include_text_strategy=...)` 增加 text
+  策略候选，与 lines 结果按 bbox 去重；路由器要求 text 候选必须有 L0 参考
+  （`text_without_reference`），否则正文页会被 text 策略虚报成表。
+- **评估结论（不启用）**：19 份文档 × 前 10 页（约 190 页，含围标/年报/法规），
+  三种 text 变体（`text`、`text+tolerance`、`lines+text`）在验收网关下：
+  候选 9 / 9 / 21，通过 6 / 7 / 12，**优于 L0 Markdown 0 次**。
+  因此 `enable_text_strategy=False` 保持默认，geometry 仍是无框线表主路径；
+  开关保留以便新语料复核。CHANGELOG 记录该依据。
+- 明确未做：用 text 策略替换 geometry 主路径——缺乏样本证据；
+  待补充无框线表格语料后重新评估。
 
 ## 6. Phase 5：结构拆分与去重（P1）
 

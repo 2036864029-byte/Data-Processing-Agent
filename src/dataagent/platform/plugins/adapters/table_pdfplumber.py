@@ -1,17 +1,22 @@
-"""pdfplumber 有框线表格 → TableGrid（L2 表格抽取适配器）。
+"""pdfplumber 表格 → TableGrid（L2 表格抽取适配器）。
 
-只负责“有框线表格”的确定性抽取：
-- 用 pdfplumber 的 lines 策略读取真实单元格边界（lines + rects 均视为边）；
+只负责确定性抽取，不做质量判断与路由：
+
+- **lines 策略**（默认）：用真实单元格边界（lines + rects 均视为边）；
+- **text 策略**（可选，`include_text_strategy=True`）：无框线表按文本对齐推断网格。
+  2026-11-08 在 19 份文档 190 页上评估：三种 text 变体在验收网关下 0 次优于
+  L0 Markdown，故默认关闭；保留开关便于新语料复核。
 - 把 pdfplumber 的左上原点坐标转换为 contracts/table.py 的左下原点坐标；
 - 合并单元格按 bbox 跨过的行/列边界推断 rowspan/colspan；
 - 退化表（<2 行、<2 列、非空格 <2）直接丢弃。
 
-不做表格质量判断与路由；验收网关在 pipeline/table/acceptance.py。
+验收网关在 pipeline/table/acceptance.py。
 """
 
 from __future__ import annotations
 
 import io
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Self
 
@@ -23,6 +28,10 @@ TABLE_SETTINGS: dict[str, str] = {
     "vertical_strategy": "lines",
     "horizontal_strategy": "lines",
 }
+TABLE_SETTINGS_TEXT: dict[str, object] = {
+    "vertical_strategy": "text",
+    "horizontal_strategy": "text",
+}
 MIN_ROWS = 2
 MIN_COLS = 2
 MIN_CELLS = 2
@@ -30,10 +39,13 @@ EDGE_TOLERANCE = 0.5
 
 
 class PdfplumberTableSource:
-    """按页抽取有框线表格；一个实例对应一份文档。"""
+    """按页抽取表格；一个实例对应一份文档。"""
 
-    def __init__(self, source: str | Path | bytes) -> None:
+    def __init__(
+        self, source: str | Path | bytes, *, include_text_strategy: bool = False
+    ) -> None:
         self._stream: io.BytesIO | None = None
+        self._include_text_strategy = include_text_strategy
         if isinstance(source, bytes):
             self._stream = io.BytesIO(source)
             self._pdf = pdfplumber.open(self._stream)
@@ -56,22 +68,58 @@ class PdfplumberTableSource:
             return ()
         page = self._pdf.pages[page_no - 1]
         try:
-            tables = page.find_tables(table_settings=TABLE_SETTINGS)
-            grids = (
-                grid_from_table(
-                    table, page_no=page_no, page_height=float(page.height)
-                )
-                for table in tables
+            ruled = self._extract_page(
+                page,
+                page_no=page_no,
+                settings=TABLE_SETTINGS,
+                source_engine="pdfplumber.lines",
             )
-            return tuple(grid for grid in grids if grid is not None)
+            if not self._include_text_strategy:
+                return ruled
+            bordered = tuple(grid.bbox for grid in ruled)
+            extracted = self._extract_page(
+                page,
+                page_no=page_no,
+                settings=TABLE_SETTINGS_TEXT,
+                source_engine="pdfplumber.text",
+            )
+            return ruled + tuple(
+                grid
+                for grid in extracted
+                if not any(_overlaps(grid.bbox, box) for box in bordered)
+            )
         finally:
             flush = getattr(page, "flush_cache", None)
             if callable(flush):
                 flush()
 
+    @staticmethod
+    def _extract_page(
+        page: Any,
+        *,
+        page_no: int,
+        settings: Mapping[str, object],
+        source_engine: str,
+    ) -> tuple[TableGrid, ...]:
+        tables = page.find_tables(table_settings=settings)
+        grids = (
+            grid_from_table(
+                table,
+                page_no=page_no,
+                page_height=float(page.height),
+                source_engine=source_engine,
+            )
+            for table in tables
+        )
+        return tuple(grid for grid in grids if grid is not None)
+
 
 def grid_from_table(
-    table: Any, *, page_no: int, page_height: float
+    table: Any,
+    *,
+    page_no: int,
+    page_height: float,
+    source_engine: str = "pdfplumber.lines",
 ) -> TableGrid | None:
     """把单个 pdfplumber Table 转为 TableGrid；退化表返回 None。"""
     raw_cells = [tuple(float(value) for value in cell) for cell in table.cells]
@@ -134,9 +182,20 @@ def grid_from_table(
         n_cols=n_cols,
         header_rows=header_rows,
         cells=tuple(cells),
-        source_engine="pdfplumber.lines",
+        source_engine=source_engine,
         confidence=round(0.5 + 0.5 * coverage, 4),
     )
+
+
+def _overlaps(
+    bbox: tuple[float, float, float, float],
+    other: tuple[float, float, float, float],
+) -> bool:
+    x0 = max(bbox[0], other[0])
+    y0 = max(bbox[1], other[1])
+    x1 = min(bbox[2], other[2])
+    y1 = min(bbox[3], other[3])
+    return x0 < x1 and y0 < y1
 
 
 def _cluster_edges(values: list[float]) -> list[float]:

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.table.policy import DEFAULT_TABLE_POLICY, TablePolicy
 from dataagent.pipeline.table.prose import is_prose_cells
 
 _SEPARATOR_CELL: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
@@ -120,7 +121,10 @@ def _matrix_col_occupancy(matrix: Sequence[Sequence[str]]) -> float:
 
 
 def table_page_metrics(
-    markdown: str, *, skip_prose: bool = False
+    markdown: str,
+    *,
+    skip_prose: bool = False,
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> TableMetrics | None:
     """解析 Markdown 中的全部管道表；无表返回 None。
 
@@ -130,7 +134,9 @@ def table_page_metrics(
     """
     tables = _parse_tables(markdown)
     if skip_prose:
-        tables = [table for table in tables if not _is_prose_table(table)]
+        tables = [
+            table for table in tables if not _is_prose_table(table, policy)
+        ]
     if not tables:
         return None
     fills: list[float] = []
@@ -156,10 +162,11 @@ def table_page_metrics(
 
 def _is_prose_table(
     table: tuple[list[str], list[str], list[list[str]]],
+    policy: TablePolicy,
 ) -> bool:
     header, _separator, rows = table
     return is_prose_cells(
-        [*header, *(cell for row in rows for cell in row)]
+        [*header, *(cell for row in rows for cell in row)], policy=policy
     )
 
 

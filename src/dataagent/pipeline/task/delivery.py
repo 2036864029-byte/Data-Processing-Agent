@@ -103,7 +103,12 @@ class DocumentDeliveryService:
         source: PdfplumberTableSource | None = None
         try:
             if context.routing.family is Family.PDF and context.table_pages:
-                source = PdfplumberTableSource(context.path)
+                source = PdfplumberTableSource(
+                    context.path,
+                    include_text_strategy=(
+                        self._config.table_policy.enable_text_strategy
+                    ),
+                )
             self._recover_table_quality(context, scope, source=source)
             fallback = resolve_fallback(
                 self._config.fallback,
@@ -294,16 +299,26 @@ class DocumentDeliveryService:
                 and context.routing.family is Family.PDF
                 and context.table_pages
             ):
-                source = PdfplumberTableSource(context.path)
+                source = PdfplumberTableSource(
+                    context.path,
+                    include_text_strategy=(
+                        self._config.table_policy.enable_text_strategy
+                    ),
+                )
                 owns_source = True
             if source is not None:
                 blocks = build_document_blocks(
                     document,
                     layouts=context.layouts,
                     ruled_tables=source.extract_page,
+                    policy=self._config.table_policy,
                 )
             else:
-                blocks = build_document_blocks(document, layouts=context.layouts)
+                blocks = build_document_blocks(
+                    document,
+                    layouts=context.layouts,
+                    policy=self._config.table_policy,
+                )
         except Exception as exc:
             log_event(
                 "table_build_failed",

@@ -24,6 +24,32 @@ def good_markdown() -> str:
     return "| 项目 | 金额 |\n|---|---|\n| 合计 | 100 |\n"
 
 
+def test_text_strategy_candidate_requires_l0_reference() -> None:
+    """text 策略在正文页会虚报表格；没有 L0 参考时一律拒绝。"""
+    grid = TableGrid(
+        page_no=1,
+        bbox=(0.0, 0.0, 100.0, 50.0),
+        n_rows=2,
+        n_cols=2,
+        header_rows=1,
+        cells=(
+            TableCell(row=0, col=0, text="A"),
+            TableCell(row=0, col=1, text="B"),
+            TableCell(row=1, col=0, text="1"),
+            TableCell(row=1, col=1, text="2"),
+        ),
+        source_engine="pdfplumber.text",
+        confidence=0.8,
+    )
+
+    routing = route_tables(
+        "正文没有表格。\n", [], page_no=1, ruled_tables=[grid]
+    )
+
+    assert routing.tables == ()
+    assert routing.rejected_ruled == ("text_without_reference",)
+
+
 def test_geometry_wins_when_markdown_header_missing() -> None:
     markdown = "| | |\n|---|---|\n| 项目 | 金额 |\n| 合计 | 100 |\n"
 

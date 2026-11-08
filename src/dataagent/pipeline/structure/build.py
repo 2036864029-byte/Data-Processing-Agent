@@ -42,11 +42,12 @@ from dataagent.pipeline.structure.models import (
 )
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.table.markdown import markdown_table_spans, markdown_tables
-from dataagent.pipeline.table.prose import (
-    PROSE_TABLE_AREA_RATIO,
-    SENTENCE_END,
-    is_prose_cells,
+from dataagent.pipeline.table.policy import (
+    DEFAULT_TABLE_POLICY,
+    TablePolicy,
+    TableSource,
 )
+from dataagent.pipeline.table.prose import SENTENCE_END, is_prose_cells
 from dataagent.pipeline.table.router import TableRouting, route_tables
 from dataagent.pipeline.table.rowmerge import merge_logical_rows
 from dataagent.platform.observe.log import log_event
@@ -101,6 +102,7 @@ def build_document_blocks(
     *,
     layouts: Mapping[int, PageLayout],
     ruled_tables: Callable[[int], Sequence[TableGrid]] | None = None,
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> DocumentBlocks:
     pages: list[PageBlocks] = []
     warnings: list[str] = []
@@ -117,6 +119,7 @@ def build_document_blocks(
             layout=layout,
             ruled_tables=ruled,
             dropped_lines=dropped_lines,
+            policy=policy,
         )
         pages.append(result.page)
         warnings.extend(result.warnings)
@@ -147,12 +150,17 @@ def build_page_blocks(
     layout: PageLayout,
     ruled_tables: Sequence[TableGrid] = (),
     dropped_lines: frozenset[str] = frozenset(),
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> PageBuildResult:
     page_bbox = _page_bbox(layout.items)
     l0_grids = markdown_tables(markdown, page_no=page_no, bbox=page_bbox)
     spans = markdown_table_spans(markdown)
     routing = route_tables(
-        markdown, layout.items, page_no=page_no, ruled_tables=ruled_tables
+        markdown,
+        layout.items,
+        page_no=page_no,
+        ruled_tables=ruled_tables,
+        policy=policy,
     )
     slots, demoted, warnings = _build_slots(
         routing,
@@ -161,6 +169,7 @@ def build_page_blocks(
         page_bbox,
         page_no=page_no,
         has_items=bool(layout.items),
+        policy=policy,
     )
     if layout.items and all(slot.trusted_bbox for slot in slots):
         blocks, item_warnings = _item_blocks(
@@ -199,6 +208,7 @@ def _build_slots(
     *,
     page_no: int,
     has_items: bool,
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> tuple[list[TableSlot], list[tuple[int, int]], list[str]]:
     slots: list[TableSlot] = []
     used_l0: set[int] = set()
@@ -224,7 +234,7 @@ def _build_slots(
             TableSlot(
                 grid=grid,
                 bbox=grid.bbox,
-                source="markdown",
+                source=TableSource.MARKDOWN,
                 trusted_bbox=_trusted_bbox(grid.bbox, page_bbox),
                 span=spans[index] if index < len(spans) else None,
             )
@@ -240,7 +250,7 @@ def _build_slots(
     # 坐标项也不会再进入文本块（R-0033 / R-0036 实测）。
     kept: list[TableSlot] = []
     for slot in slots:
-        if slot.span is not None and _is_prose_table(slot, page_bbox):
+        if slot.span is not None and _is_prose_table(slot, page_bbox, policy):
             demoted.append(slot.span)
         else:
             kept.append(slot)
@@ -808,7 +818,9 @@ def _is_caption(text: str) -> bool:
     return _CAPTION_RE.search(stripped) is not None
 
 
-def _is_prose_table(slot: TableSlot, page_bbox: BBox) -> bool:
+def _is_prose_table(
+    slot: TableSlot, page_bbox: BBox, policy: TablePolicy = DEFAULT_TABLE_POLICY
+) -> bool:
     """L0 表若整体像正文而不是行列结构，视为 pdf-inspector 伪表格。
 
     旧逻辑只看首行，且不要求表格覆盖页面大部分区域；实测会把
@@ -816,15 +828,17 @@ def _is_prose_table(slot: TableSlot, page_bbox: BBox) -> bool:
     新逻辑：表格 bbox 覆盖页面 ≥60%，且出现 ≥2 个带句末标点的散文单元格，
     或任一 ≥120 字的散文单元格。
     """
-    if slot.source != "markdown":
+    if slot.source != TableSource.MARKDOWN:
         return False
     grid = slot.grid
     page_area = _area(page_bbox)
     if page_area <= 0:
         return False
-    if _area(grid.bbox) / page_area < PROSE_TABLE_AREA_RATIO:
+    if _area(grid.bbox) / page_area < policy.prose_table_area_ratio:
         return False
-    return is_prose_cells(cell.text for cell in grid.cells)
+    return is_prose_cells(
+        (cell.text for cell in grid.cells), policy=policy
+    )
 
 
 def _demoted_text(lines: Sequence[str]) -> list[str]:

@@ -8,6 +8,7 @@ from typing import Final
 from dataagent.kernel.plan import FrozenPlan
 from dataagent.pipeline.quality.l2_sample import ProfileSpeed
 from dataagent.pipeline.repair.fallback import EnhancerKind, FallbackConfig
+from dataagent.pipeline.table.policy import DEFAULT_TABLE_POLICY, TablePolicy
 
 DEFAULT_BATCH_PAGES: Final[int] = 32
 # P0 字符密度口径：A4 版心近似面积（cm²）；P1 由真实 bbox 替换
@@ -27,3 +28,4 @@ class TaskConfig:
     available_enhancers: frozenset[EnhancerKind] = frozenset()
     profile_speed: ProfileSpeed = ProfileSpeed.BALANCED
     plan: FrozenPlan | None = None
+    table_policy: TablePolicy = DEFAULT_TABLE_POLICY

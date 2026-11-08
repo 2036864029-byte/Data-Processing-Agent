@@ -19,19 +19,19 @@ from dataagent.pipeline.table.geometry import (
     detect_table_regions,
 )
 from dataagent.pipeline.table.markdown import markdown_tables
+from dataagent.pipeline.table.policy import (
+    DEFAULT_TABLE_POLICY,
+    TablePolicy,
+    TableSource,
+)
 from dataagent.pipeline.table.quality import GridQuality, grid_quality
 from dataagent.platform.observe.log import log_event
-
-SELECTION_MARGIN = 0.05
-PAIR_MIN_OVERLAP = 0.15
-FRAGMENT_OVERLAP = 0.5
-L0_SUPPRESS_COVERAGE = 0.8
 
 
 @dataclass(frozen=True, slots=True)
 class TableChoice:
     grid: TableGrid
-    source: str
+    source: TableSource
     reason: str
     quality: GridQuality
 
@@ -51,6 +51,7 @@ def route_tables(
     *,
     page_no: int,
     ruled_tables: Sequence[TableGrid] = (),
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> TableRouting:
     page_bbox = _page_bbox(items)
     l0 = markdown_tables(markdown, page_no=page_no, bbox=page_bbox)
@@ -80,7 +81,13 @@ def route_tables(
     gate_bbox = page_bbox if items else None
     for ruled in ruled_tables:
         reference = _reference_for(ruled, l0_grids, projected)
-        decision = evaluate_candidate(ruled, reference, page_bbox=gate_bbox)
+        if reference is None and _is_text_strategy(ruled):
+            # text 策略在正文页会虚报表格；没有 L0 参考时无从校验内容覆盖。
+            rejected_ruled.append("text_without_reference")
+            continue
+        decision = evaluate_candidate(
+            ruled, reference, page_bbox=gate_bbox, policy=policy
+        )
         if not decision.accepted:
             rejected_ruled.append(decision.reason)
             continue
@@ -88,29 +95,31 @@ def route_tables(
         choices.append(
             TableChoice(
                 grid=ruled,
-                source="ruled",
+                source=TableSource.RULED,
                 reason=decision.reason,
                 quality=grid_quality(ruled),
             )
         )
 
-    pairs = _pair_by_overlap(l0_grids, projected, l1_pairs)
+    pairs = _pair_by_overlap(
+        l0_grids, projected, l1_pairs, policy=policy
+    )
     paired_l0 = {index for index, _ in pairs}
     paired_l1 = {index for _, index in pairs}
 
     for l0_index, l1_index in pairs:
         markdown_grid = l0_grids[l0_index]
-        if _covered_by_ruled(markdown_grid, accepted_ruled):
+        if _covered_by_ruled(markdown_grid, accepted_ruled, policy=policy):
             continue
         geometry_grid, bbox = l1_pairs[l1_index]
         geometry_grid = geometry_grid.model_copy(update={"bbox": bbox})
         markdown_quality = grid_quality(markdown_grid)
         geometry_quality = grid_quality(geometry_grid)
-        if geometry_quality.score > markdown_quality.score + SELECTION_MARGIN:
+        if geometry_quality.score > markdown_quality.score + policy.selection_margin:
             choices.append(
                 TableChoice(
                     grid=geometry_grid,
-                    source="geometry",
+                    source=TableSource.GEOMETRY,
                     reason=(
                         f"geometry {geometry_quality.score:.3f} > "
                         f"markdown {markdown_quality.score:.3f}"
@@ -122,7 +131,7 @@ def route_tables(
             choices.append(
                 TableChoice(
                     grid=markdown_grid,
-                    source="markdown",
+                    source=TableSource.MARKDOWN,
                     reason=(
                         f"markdown {markdown_quality.score:.3f} >= "
                         f"geometry {geometry_quality.score:.3f}"
@@ -134,12 +143,12 @@ def route_tables(
     for index, grid in enumerate(l0_grids):
         if index in paired_l0:
             continue
-        if _covered_by_ruled(grid, accepted_ruled):
+        if _covered_by_ruled(grid, accepted_ruled, policy=policy):
             continue
         choices.append(
             TableChoice(
                 grid=grid,
-                source="markdown",
+                source=TableSource.MARKDOWN,
                 reason="only_l0",
                 quality=grid_quality(grid),
             )
@@ -152,16 +161,19 @@ def route_tables(
         if index in paired_l1:
             continue
         if any(
-            _overlap_ratio(bbox, ruled.bbox) >= FRAGMENT_OVERLAP
+            _overlap_ratio(bbox, ruled.bbox) >= policy.fragment_overlap
             for ruled in accepted_ruled
         ):
             continue
-        if any(_overlap_ratio(bbox, box) >= FRAGMENT_OVERLAP for box in l0_boxes):
+        if any(
+            _overlap_ratio(bbox, box) >= policy.fragment_overlap
+            for box in l0_boxes
+        ):
             continue
         choices.append(
             TableChoice(
                 grid=grid,
-                source="geometry",
+                source=TableSource.GEOMETRY,
                 reason="only_l1",
                 quality=grid_quality(grid),
             )
@@ -226,15 +238,22 @@ def _reference_for(
     return None if best is None else l0_grids[best[2]]
 
 
+def _is_text_strategy(grid: TableGrid) -> bool:
+    return grid.source_engine.endswith(".text")
+
+
 def _covered_by_ruled(
-    grid: TableGrid, accepted_ruled: Sequence[TableGrid]
+    grid: TableGrid,
+    accepted_ruled: Sequence[TableGrid],
+    *,
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> bool:
     if not accepted_ruled:
         return False
     region = _union_boxes([ruled.bbox for ruled in accepted_ruled])
     return (
         coverage_of(grid, accepted_ruled, region=region)
-        >= L0_SUPPRESS_COVERAGE
+        >= policy.l0_suppress_coverage
     )
 
 
@@ -253,6 +272,8 @@ def _pair_by_overlap(
     l0_grids: Sequence[TableGrid],
     projected: Sequence[ProjectedGrid | None],
     l1_pairs: Sequence[tuple[TableGrid, tuple[float, float, float, float]]],
+    *,
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> list[tuple[int, int]]:
     candidates: list[tuple[float, int, int]] = []
     for l1_index, (_grid, bbox) in enumerate(l1_pairs):
@@ -278,7 +299,7 @@ def _pair_by_overlap(
         l0_area = areas.get(l0_index, 0.0)
         l1_area = _area(l1_pairs[l1_index][1])
         smaller = min(l0_area, l1_area)
-        if smaller <= 0 or _score / smaller < PAIR_MIN_OVERLAP:
+        if smaller <= 0 or _score / smaller < policy.pair_min_overlap:
             continue
         used_l0.add(l0_index)
         used_l1.add(l1_index)

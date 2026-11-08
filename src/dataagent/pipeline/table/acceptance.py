@@ -18,12 +18,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.table.policy import DEFAULT_TABLE_POLICY, TablePolicy
 
-MIN_ROWS = 2
-MIN_COLS = 2
-MIN_FILLED_RATIO = 0.15
-MIN_TEXT_COVERAGE = 0.85
-MIN_ROW_RATIO = 0.50
 BBOX_TOLERANCE_RATIO = 0.05
 CELL_REGION_TOLERANCE = 1.0
 
@@ -53,6 +49,7 @@ def evaluate_candidate(
     reference: TableGrid | None,
     *,
     page_bbox: tuple[float, float, float, float] | None = None,
+    policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> GateDecision:
     stats = GateStats(
         n_rows=candidate.n_rows,
@@ -70,7 +67,7 @@ def evaluate_candidate(
         ),
         multi_value_cells=_multi_value_cells(candidate),
     )
-    reason = _first_failure(candidate, stats, page_bbox)
+    reason = _first_failure(candidate, stats, page_bbox, policy)
     return GateDecision(
         accepted=reason is None,
         reason=reason or "accepted",
@@ -107,14 +104,18 @@ def _first_failure(
     candidate: TableGrid,
     stats: GateStats,
     page_bbox: tuple[float, float, float, float] | None,
+    policy: TablePolicy,
 ) -> str | None:
-    if stats.n_rows < MIN_ROWS or stats.n_cols < MIN_COLS:
+    if stats.n_rows < policy.min_rows or stats.n_cols < policy.min_cols:
         return "too_small"
-    if stats.filled_ratio < MIN_FILLED_RATIO:
+    if stats.filled_ratio < policy.min_filled_ratio:
         return "low_fill"
-    if stats.text_coverage is not None and stats.text_coverage < MIN_TEXT_COVERAGE:
+    if (
+        stats.text_coverage is not None
+        and stats.text_coverage < policy.min_text_coverage
+    ):
         return "text_loss"
-    if stats.row_ratio is not None and stats.row_ratio < MIN_ROW_RATIO:
+    if stats.row_ratio is not None and stats.row_ratio < policy.min_row_ratio:
         return "row_loss"
     if stats.multi_value_cells > 0:
         return "multi_value_cell"

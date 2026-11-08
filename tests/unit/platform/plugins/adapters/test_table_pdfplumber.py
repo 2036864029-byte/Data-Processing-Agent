@@ -210,3 +210,23 @@ def test_source_accepts_bytes(monkeypatch: Any) -> None:
         assert hasattr(captured["source"], "read")
     finally:
         source.close()
+
+
+def test_grid_from_table_records_source_engine() -> None:
+    table: Any = _Table(
+        bbox=(0.0, 10.0, 20.0, 30.0),
+        cells=[
+            _bbox_cell(0.0, 10.0, 10.0, 20.0),
+            _bbox_cell(10.0, 10.0, 20.0, 20.0),
+            _bbox_cell(0.0, 20.0, 10.0, 30.0),
+            _bbox_cell(10.0, 20.0, 20.0, 30.0),
+        ],
+        matrix=[["A", "B"], ["C", "D"]],
+    )
+
+    grid = grid_from_table(
+        table, page_no=1, page_height=100.0, source_engine="pdfplumber.text"
+    )
+
+    assert grid is not None
+    assert grid.source_engine == "pdfplumber.text"

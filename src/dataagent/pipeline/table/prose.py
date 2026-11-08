@@ -16,22 +16,23 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Final
 
+from dataagent.pipeline.table.policy import DEFAULT_TABLE_POLICY, TablePolicy
+
 SENTENCE_END: Final[str] = "。！？；：!?;:"
-PROSE_CELL_MIN_CHARS: Final[int] = 120
-PROSE_CELL_SHORT_MIN_CHARS: Final[int] = 20
-PROSE_TABLE_AREA_RATIO: Final[float] = 0.6
 
 
-def is_prose_cells(texts: Iterable[str]) -> bool:
+def is_prose_cells(
+    texts: Iterable[str], *, policy: TablePolicy = DEFAULT_TABLE_POLICY
+) -> bool:
     """单元格文字像正文而非行列数据。"""
     short_prose = 0
     for text in texts:
         stripped = text.strip()
-        if len(stripped) < PROSE_CELL_SHORT_MIN_CHARS:
+        if len(stripped) < policy.prose_cell_short_min_chars:
             continue
         if not any(mark in stripped for mark in SENTENCE_END):
             continue
-        if len(stripped) >= PROSE_CELL_MIN_CHARS:
+        if len(stripped) >= policy.prose_cell_min_chars:
             return True
         short_prose += 1
-    return short_prose >= 2
+    return short_prose >= policy.prose_short_cell_count

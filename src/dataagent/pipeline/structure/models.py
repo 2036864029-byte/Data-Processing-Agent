@@ -11,6 +11,7 @@ from typing import Literal
 
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.table.geometry import PositionedText
+from dataagent.pipeline.table.policy import TableSource
 
 BBox = tuple[float, float, float, float]
 
@@ -28,7 +29,7 @@ class PageLayout:
 class TableSlot:
     grid: TableGrid
     bbox: BBox
-    source: str
+    source: TableSource
     trusted_bbox: bool = True
     caption: str | None = None
     span: tuple[int, int] | None = None

@@ -311,7 +311,9 @@ class PageQualityService:
         metrics = L1Metrics.from_text(markdown, text_area=self._config.text_area_cm2)
         if not has_table:
             return metrics
-        table = table_page_metrics(markdown, skip_prose=True)
+        table = table_page_metrics(
+            markdown, skip_prose=True, policy=self._config.table_policy
+        )
         if table is None:
             return metrics
         return replace(
