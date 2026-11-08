@@ -16,7 +16,7 @@ from dataagent.pipeline.quality.normalization import (
     normalize_table_grid,
     normalize_text,
 )
-from dataagent.pipeline.structure import build as build_module
+from dataagent.pipeline.structure.blocks import join_lines
 
 _TEXT_ALPHABET = st.sampled_from(
     list("甲乙丙丁中文章节条款规定")
@@ -48,7 +48,7 @@ def test_numbering_repair_applies_on_coordinate_path() -> None:
     lines = ["1 答：（）", "内容"]
 
     body = normalize_text("\n".join(lines))
-    coordinate = build_module._join_lines(lines)
+    coordinate = join_lines(lines)
 
     assert body == coordinate == "答：（1）内容"
     assert "1 答：" not in coordinate

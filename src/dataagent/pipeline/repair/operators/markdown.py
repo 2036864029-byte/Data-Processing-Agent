@@ -25,8 +25,8 @@ from dataagent.pipeline.repair.operators.base import (
     OperatorFn,
     OperatorOutcome,
 )
+from dataagent.pipeline.table.syntax import is_separator_cell
 
-_SEPARATOR_CELL_RE: Final[re.Pattern[str]] = re.compile(r":?-{3,}:?")
 _PAGE_NUMBER_RE: Final[re.Pattern[str]] = re.compile(
     r"^\s*(?:第\s*\d+\s*页|page\s+\d+(?:\s*(?:/|of)\s*\d+)?|\d+\s*/\s*\d+|[-–—]\s*\d+\s*[-–—])\s*$",
     re.IGNORECASE,
@@ -173,9 +173,7 @@ def _join_cells(cells: list[str]) -> str:
 
 def _is_separator(cells: list[str]) -> bool:
     non_empty = [cell for cell in cells if cell]
-    return bool(non_empty) and all(
-        _SEPARATOR_CELL_RE.fullmatch(cell) for cell in non_empty
-    )
+    return bool(non_empty) and all(is_separator_cell(cell) for cell in non_empty)
 
 
 def _normalize_block(block: list[str]) -> list[str]:

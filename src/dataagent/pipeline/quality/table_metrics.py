@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -20,14 +19,13 @@ from typing import Final
 from dataagent.contracts.table import TableGrid
 from dataagent.pipeline.table.policy import DEFAULT_TABLE_POLICY, TablePolicy
 from dataagent.pipeline.table.prose import is_prose_cells
-
-_SEPARATOR_CELL: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
-_PIPE: Final[str] = "|"
+from dataagent.pipeline.table.syntax import is_separator_cell
 
 TABLE_CELL_FILL_MIN: Final[float] = 0.90
 ROW_COL_VARIANCE_MAX: Final[float] = 1.0
 ROW_OCCUPANCY_MIN: Final[float] = 0.8
 COL_OCCUPANCY_MIN: Final[float] = 0.8
+_PIPE: Final[str] = "|"
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,7 +196,7 @@ def _is_separator(line: str) -> bool:
     if _PIPE not in line:
         return False
     cells = _split_row(line)
-    return bool(cells) and all(_SEPARATOR_CELL.match(cell) for cell in cells)
+    return bool(cells) and all(is_separator_cell(cell) for cell in cells)
 
 
 def _split_row(line: str) -> list[str]:
@@ -212,7 +210,7 @@ def _split_row(line: str) -> list[str]:
 
 def _header_ok(header: list[str], separator: list[str]) -> bool:
     return any(cell for cell in header) and bool(separator) and all(
-        _SEPARATOR_CELL.match(cell) for cell in separator
+        is_separator_cell(cell) for cell in separator
     )
 
 

@@ -12,7 +12,9 @@ from dataagent.pipeline.merge.merger import (
     merge_document,
 )
 from dataagent.pipeline.structure.build import build_document_blocks, build_page_blocks
-from dataagent.pipeline.structure.models import PageLayout
+from dataagent.pipeline.structure.lines import cluster_lines
+from dataagent.pipeline.structure.models import PageLayout, TableSlot
+from dataagent.pipeline.structure.slots import is_prose_table
 from dataagent.pipeline.table.geometry import PositionedText
 from dataagent.pipeline.table.quality import grid_quality
 from dataagent.pipeline.table.router import TableChoice, TableRouting
@@ -565,9 +567,9 @@ def test_page_header_plus_prose_body_is_demoted() -> None:
         [["2026/7/28 20:54", "", "", "", "", "_", ""], ["", "", body, "", "", "", ""]],
         bbox=(0.0, 0.0, 100.0, 100.0),
     )
-    slot = build_module.TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
+    slot = TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
 
-    assert build_module._is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
+    assert is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
 
 
 def test_multi_row_prose_cells_are_demoted() -> None:
@@ -582,9 +584,9 @@ def test_multi_row_prose_cells_are_demoted() -> None:
         ],
         bbox=(0.0, 0.0, 100.0, 100.0),
     )
-    slot = build_module.TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
+    slot = TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
 
-    assert build_module._is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
+    assert is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
 
 
 def test_prose_cells_in_small_table_are_not_demoted() -> None:
@@ -595,9 +597,9 @@ def test_prose_cells_in_small_table_are_not_demoted() -> None:
         ],
         bbox=(0.0, 0.0, 50.0, 50.0),
     )
-    slot = build_module.TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
+    slot = TableSlot(grid=grid, bbox=grid.bbox, source="markdown")
 
-    assert not build_module._is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
+    assert not is_prose_table(slot, (0.0, 0.0, 100.0, 100.0))
 
 
 def test_inline_numbers_attach_to_the_x_gap_line() -> None:
@@ -610,7 +612,7 @@ def test_inline_numbers_attach_to_the_x_gap_line() -> None:
         item("人受伤。", 236.56, 262.5, width=60.0),
     ]
 
-    lines = build_module._cluster_lines(items)
+    lines = cluster_lines(items)
 
     assert any(
         line.text.endswith("成21名参赛选手死亡，8人受伤。") for line in lines
@@ -624,6 +626,6 @@ def test_inline_number_attaches_to_answer_line() -> None:
         item("1", 114.49, 660.0, width=8.18),
     ]
 
-    lines = build_module._cluster_lines(items)
+    lines = cluster_lines(items)
 
     assert any("答：（1）最低投标价法" in line.text for line in lines)

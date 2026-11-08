@@ -2,7 +2,7 @@
 
 **日期**：2026-11-08
 **来源**：B9 标注审计（`docs/b9-calibration-diagnosis.md`）与表格/归一化代码审计
-**状态**：Phase 1–3 与 Phase 4（含 4.3/4.4）已完成（2026-11-08）；Phase 5–7 待实施
+**状态**：Phase 1–5 已完成（2026-11-08）；Phase 6–7 待实施
 **原则**：每个 Phase 独立可交付；先测试后改；全量门禁保持绿；阈值集中、不新增散落常量；
 单文件 ≤500 行；所有修复可回滚（按 Phase 单独提交）。
 
@@ -303,6 +303,23 @@
 
 - 纯移动 + re-export，先不改行为；单测保持通过；import-linter 保持；
 - 每个文件 ≤500 行；必要时把几何工具下沉到 `pipeline/table/geometry.py`。
+
+**实施结果（2026-11-08）**
+
+- `build.py` 884 → **143 行**：`lines.py`（184）/ `slots.py`（239）/
+  `blocks.py`（342）承接全部实现；`build.py` 只留页面级与文档级编排。
+  与计划的差异：函数去掉了下划线前缀（跨模块导入，不保留私有名）；
+  不保留 re-export，所有调用点（含测试）直接改为新模块导入。
+- 与计划的差异：`structure/geometry_utils.py` 改为 `pipeline/table/bbox.py`，
+  同时替换 router / anchor / geometry 的重复实现（计划只点名 build）；
+  两种重叠语义显式命名：`overlap_ratio`（自身面积）与
+  `symmetric_overlap_ratio`（较小面积），避免重构时语义漂移。
+- 分隔行正则 5 → 1：落地在 `pipeline/table/syntax.py`（叶子模块）。
+  不能放 `table/markdown.py`：`repair → table.markdown → quality` 会循环导入。
+- 终止标点 3 套 → `pipeline/quality/punctuation.py` 集中定义并文档化差异
+  （正文/伪表/文本指标各自集合不同）。
+- 行为不变：1032 测试全绿；R-0023 标题与茅台 p5 表格形态与拆分前一致；
+  ruff / mypy / import-linter / check-gates 全绿；src 下无 >500 行文件。
 
 ## 7. Phase 6：观测与回归（P1）
 

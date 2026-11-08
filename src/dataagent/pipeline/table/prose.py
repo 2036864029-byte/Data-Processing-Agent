@@ -14,11 +14,9 @@ pdf-inspector 会把“页眉 + 整页正文”或长问答题误判成表格（
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Final
 
+from dataagent.pipeline.quality.punctuation import SENTENCE_END
 from dataagent.pipeline.table.policy import DEFAULT_TABLE_POLICY, TablePolicy
-
-SENTENCE_END: Final[str] = "。！？；：!?;:"
 
 
 def is_prose_cells(

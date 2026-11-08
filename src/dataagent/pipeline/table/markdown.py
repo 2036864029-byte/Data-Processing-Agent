@@ -5,13 +5,9 @@
 
 from __future__ import annotations
 
-import re
-from typing import Final
-
 from dataagent.contracts.table import TableCell, TableGrid
 from dataagent.pipeline.quality.normalization import normalize_cell
-
-_SEPARATOR_CELL: Final[re.Pattern[str]] = re.compile(r"^:?-{3,}:?$")
+from dataagent.pipeline.table.syntax import is_separator_cell
 
 
 def markdown_tables(
@@ -102,7 +98,7 @@ def _is_separator(line: str) -> bool:
     if "|" not in line:
         return False
     cells = _split_row(line)
-    return bool(cells) and all(_SEPARATOR_CELL.match(cell) for cell in cells)
+    return bool(cells) and all(is_separator_cell(cell) for cell in cells)
 
 
 def _split_row(line: str) -> list[str]:

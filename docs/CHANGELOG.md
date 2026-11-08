@@ -10,6 +10,24 @@
 
 ## [未发布]
 
+### 结构拆分与工具去重（质量修复 Phase 5，2026-11-08）
+
+- `pipeline/structure/build.py` **884 → 143 行**，按职责拆为：
+  `lines.py`（行聚类 / 行内数字回挂）、`slots.py`（表格槽位 / 归一化汇聚点 /
+  伪表降级 / caption 归属）、`blocks.py`（Markdown 回退与坐标项两条建块路径）。
+- 新增 `pipeline/table/bbox.py`：`area / intersection_area / overlap_ratio /
+  symmetric_overlap_ratio / union_bbox / page_bbox` 的**全仓唯一实现**，
+  替换 build / router / anchor / geometry 四份重复；两种重叠语义显式命名
+  （自身面积 vs 较小面积），不再靠各自实现区分。
+- 新增 `pipeline/table/syntax.py`（叶子模块，无内部依赖）：`is_separator_cell`，
+  替换 `table_metrics` / `repair/layout` / `repair/operators/markdown` / `blocks`
+  的 5 份分隔行正则。放叶子模块是因为 `repair → table.markdown → quality`
+  会触发循环导入。
+- 新增 `pipeline/quality/punctuation.py`：`SENTENCE_END` / `BODY_TERMINAL` /
+  `TEXT_METRIC_TERMINAL` 三套集合显式命名并文档化差异，替换三处散落定义。
+- 行为不变：1032 测试全绿；R-0023 标题（`## 198.` / `## 199.`）与茅台 p5
+  表格形态（3 张，3×3 / 9×5 / 6×5）与拆分前一致。
+
 ### 表格策略集中与无框线表评估（质量修复 Phase 4.3/4.4，2026-11-08）
 
 - **阈值集中**：新增 `pipeline/table/policy.py`（`TablePolicy` + `TableSource`），

@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.table import bbox as bbox_math
 from dataagent.pipeline.table.acceptance import coverage_of, evaluate_candidate
 from dataagent.pipeline.table.anchor import ProjectedGrid, project_grid
 from dataagent.pipeline.table.geometry import (
@@ -53,7 +54,7 @@ def route_tables(
     ruled_tables: Sequence[TableGrid] = (),
     policy: TablePolicy = DEFAULT_TABLE_POLICY,
 ) -> TableRouting:
-    page_bbox = _page_bbox(items)
+    page_bbox = bbox_math.page_bbox(items)
     l0 = markdown_tables(markdown, page_no=page_no, bbox=page_bbox)
     projected: list[ProjectedGrid | None] = [
         project_grid(grid, items) for grid in l0
@@ -161,12 +162,12 @@ def route_tables(
         if index in paired_l1:
             continue
         if any(
-            _overlap_ratio(bbox, ruled.bbox) >= policy.fragment_overlap
+            bbox_math.overlap_ratio(bbox, ruled.bbox) >= policy.fragment_overlap
             for ruled in accepted_ruled
         ):
             continue
         if any(
-            _overlap_ratio(bbox, box) >= policy.fragment_overlap
+            bbox_math.overlap_ratio(bbox, box) >= policy.fragment_overlap
             for box in l0_boxes
         ):
             continue
@@ -229,7 +230,7 @@ def _reference_for(
     for index, item in enumerate(projected):
         if item is None:
             continue
-        overlap = _intersection_area(item.grid.bbox, ruled.bbox)
+        overlap = bbox_math.intersection_area(item.grid.bbox, ruled.bbox)
         if overlap <= 0:
             continue
         score = (coverage_of(l0_grids[index], [ruled]), overlap, index)
@@ -250,21 +251,10 @@ def _covered_by_ruled(
 ) -> bool:
     if not accepted_ruled:
         return False
-    region = _union_boxes([ruled.bbox for ruled in accepted_ruled])
+    region = bbox_math.union_bbox([ruled.bbox for ruled in accepted_ruled])
     return (
         coverage_of(grid, accepted_ruled, region=region)
         >= policy.l0_suppress_coverage
-    )
-
-
-def _union_boxes(
-    boxes: Sequence[tuple[float, float, float, float]],
-) -> tuple[float, float, float, float]:
-    return (
-        min(box[0] for box in boxes),
-        min(box[1] for box in boxes),
-        max(box[2] for box in boxes),
-        max(box[3] for box in boxes),
     )
 
 
@@ -280,7 +270,7 @@ def _pair_by_overlap(
         for l0_index, item in enumerate(projected):
             if item is None:
                 continue
-            score = _intersection_area(item.grid.bbox, bbox)
+            score = bbox_math.intersection_area(item.grid.bbox, bbox)
             if score > 0:
                 candidates.append((score, l0_index, l1_index))
     candidates.sort(reverse=True)
@@ -288,7 +278,7 @@ def _pair_by_overlap(
     used_l1: set[int] = set()
     pairs: list[tuple[int, int]] = []
     areas = {
-        index: _area(item.grid.bbox)
+        index: bbox_math.area(item.grid.bbox)
         for index, item in enumerate(projected)
         if item is not None
     }
@@ -297,7 +287,7 @@ def _pair_by_overlap(
             continue
         # 按较小面积的重叠比例配对（L0 投影可能覆盖整页，包含关系也应配对）
         l0_area = areas.get(l0_index, 0.0)
-        l1_area = _area(l1_pairs[l1_index][1])
+        l1_area = bbox_math.area(l1_pairs[l1_index][1])
         smaller = min(l0_area, l1_area)
         if smaller <= 0 or _score / smaller < policy.pair_min_overlap:
             continue
@@ -305,41 +295,3 @@ def _pair_by_overlap(
         used_l1.add(l1_index)
         pairs.append((l0_index, l1_index))
     return pairs
-
-
-def _intersection_area(
-    left: tuple[float, float, float, float],
-    right: tuple[float, float, float, float],
-) -> float:
-    x0 = max(left[0], right[0])
-    y0 = max(left[1], right[1])
-    x1 = min(left[2], right[2])
-    y1 = min(left[3], right[3])
-    if x0 >= x1 or y0 >= y1:
-        return 0.0
-    return (x1 - x0) * (y1 - y0)
-
-
-def _area(bbox: tuple[float, float, float, float]) -> float:
-    return max(0.0, bbox[2] - bbox[0]) * max(0.0, bbox[3] - bbox[1])
-
-
-def _overlap_ratio(
-    bbox: tuple[float, float, float, float],
-    other: tuple[float, float, float, float],
-) -> float:
-    area = _area(bbox)
-    if area <= 0:
-        return 0.0
-    return _intersection_area(bbox, other) / area
-
-
-def _page_bbox(items: Sequence[PositionedText]) -> tuple[float, float, float, float]:
-    if not items:
-        return (0.0, 0.0, 1.0, 1.0)
-    return (
-        min(item.x for item in items),
-        min(item.y for item in items),
-        max(item.x + item.width for item in items),
-        max(item.y + item.height for item in items),
-    )

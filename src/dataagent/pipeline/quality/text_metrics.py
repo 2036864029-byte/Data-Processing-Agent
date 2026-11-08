@@ -9,7 +9,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_TERMINAL_PUNCTUATION = "。！？；：.!?;:）)】」』,，"
+from dataagent.pipeline.quality.punctuation import TEXT_METRIC_TERMINAL
+
+_TERMINAL_PUNCTUATION = TEXT_METRIC_TERMINAL
 _NUMBERING = re.compile(
     r"^(第[一二三四五六七八九十百千0-9]+[条章节款]"
     r"|[一二三四五六七八九十]+、"

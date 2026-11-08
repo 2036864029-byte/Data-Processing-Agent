@@ -17,6 +17,7 @@ from typing import Any
 
 from dataagent.contracts.table import TableCell, TableGrid
 from dataagent.pipeline.quality.normalization import normalize_cell
+from dataagent.pipeline.table import bbox as bbox_math
 
 ROW_TOLERANCE_RATIO = 1.0
 CELL_GAP_TOLERANCE = 3.0
@@ -183,7 +184,7 @@ def build_table_grid(
     confidence: float | None = None,
 ) -> TableGrid:
     """把区域内的文本项构建成 TableGrid。"""
-    point = bbox or _union_bbox(items)
+    point = bbox or bbox_math.bbox_from_items(items)
     selected = [
         item
         for item in items
@@ -287,7 +288,7 @@ def _region_from_rows(
     confidence = consistency if mode >= min_cols else 0.0
     return TableRegion(
         page_no=page_no,
-        bbox=_union_bbox(items),
+        bbox=bbox_math.bbox_from_items(items),
         items=items,
         confidence=round(confidence, 4),
     )
@@ -342,16 +343,6 @@ def _column_consistency(rows: Sequence[_Row], n_cols: int) -> float:
         return 0.0
     aligned = sum(1 for row in rows if len(row.cells) >= min(n_cols, 2))
     return aligned / len(rows)
-
-
-def _union_bbox(
-    items: Sequence[PositionedText],
-) -> tuple[float, float, float, float]:
-    left = min(item.x for item in items)
-    right = max(item.right for item in items)
-    bottom = min(item.y for item in items)
-    top = max(item.y + item.height for item in items)
-    return (left, bottom, right, top)
 
 
 def _inside(

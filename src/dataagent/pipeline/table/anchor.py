@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from dataagent.contracts.table import TableCell, TableGrid
+from dataagent.pipeline.table import bbox as bbox_math
 from dataagent.pipeline.table.geometry import PositionedText
 
 
@@ -58,7 +59,7 @@ def project_grid(
         matched_cells += 1
         matched_items.extend(candidates)
         updated.append(
-            cell.model_copy(update={"bbox": _union_bbox(candidates)})
+            cell.model_copy(update={"bbox": bbox_math.bbox_from_items(candidates)})
         )
     coverage = matched_cells / total_cells if total_cells else 0.0
     if coverage < min_coverage or not matched_items:
@@ -67,7 +68,7 @@ def project_grid(
         grid=grid.model_copy(
             update={
                 "cells": tuple(updated),
-                "bbox": _union_bbox(matched_items),
+                "bbox": bbox_math.bbox_from_items(matched_items),
                 "confidence": round(coverage, 4),
             }
         ),
@@ -110,14 +111,3 @@ def _threshold(text: str) -> int:
 
 def _normalize(text: str) -> str:
     return "".join(str(text).split())
-
-
-def _union_bbox(
-    items: Sequence[PositionedText],
-) -> tuple[float, float, float, float]:
-    return (
-        min(item.x for item in items),
-        min(item.y for item in items),
-        max(item.x + item.width for item in items),
-        max(item.y + item.height for item in items),
-    )

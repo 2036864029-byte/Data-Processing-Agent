@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from dataagent.contracts.headings import classify_numbering
+from dataagent.pipeline.table.syntax import is_separator_cell
 
 PSEUDO_TABLE_CELL_RATIO: Final[float] = 0.6
 PSEUDO_TABLE_MIN_CHARS: Final[int] = 200
@@ -32,7 +33,6 @@ _MARKER_RE: Final[re.Pattern[str]] = re.compile(
     r"|(?:^|(?<=\s))[一二三四五六七八九十]+、",
     re.MULTILINE,
 )
-_SEPARATOR_CELL_RE: Final[re.Pattern[str]] = re.compile(r":?-{3,}:?")
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,9 +238,7 @@ def _split_cells(line: str) -> list[str]:
 
 def _is_separator(cells: list[str]) -> bool:
     non_empty = [cell for cell in cells if cell]
-    return bool(non_empty) and all(
-        _SEPARATOR_CELL_RE.fullmatch(cell) for cell in non_empty
-    )
+    return bool(non_empty) and all(is_separator_cell(cell) for cell in non_empty)
 
 
 def _content_chars(markdown: str) -> str:

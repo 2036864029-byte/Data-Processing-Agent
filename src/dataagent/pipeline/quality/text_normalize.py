@@ -16,8 +16,9 @@ from typing import Final
 
 from dataagent.contracts.headings import classify_numbering
 from dataagent.contracts.table import TableGrid
+from dataagent.pipeline.quality.punctuation import BODY_TERMINAL
 
-_TERMINAL: Final[str] = "。！？；：.!?;:…"
+_TERMINAL: Final[str] = BODY_TERMINAL
 _CJK = (
     r"㐀-䶿一-鿿"
     r"，。！？；：、（）「」『』【】《》〈〉…—"
