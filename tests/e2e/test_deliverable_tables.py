@@ -118,10 +118,11 @@ def test_selected_tables_match_router(page: int) -> None:
 
 @pytest.mark.parametrize("page", PAGES)
 def test_table_cells_are_normalized(page: int) -> None:
-    """Phase 2 不变量：单元格每一行已是归一形态（跨页通用）。
+    """回归锚点：同一份年报的 4 个表页（不同表格来源/形状）逐行已是归一形态。
 
-    注意：行合并（rowmerge）在归一化**之后**把逻辑行用 `\\n` 拼进同一单元格，
-    所以整体文本不满足 `normalize_cell_text` 幂等；逐行检查才是正确不变量。
+    这提供真实流水线上的回归面，**不是泛化**——4 页都来自同一文档同一夹具族。
+    输入域上的保证由 `tests/unit/pipeline/quality/test_cell_normalize_properties.py`
+    的性质测试承担。
     """
     markdown, layout, ruled = page_inputs(page)
 
